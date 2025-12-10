@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#d4a017">
+    <title>Actualizar Transferencia - Ferresoluciones</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-brand">
+                <img src="https://lh3.googleusercontent.com/d/1bqJM3Qw96FEIo4QSjHyn-n8laPHpfS1C=w2048"
+                    alt="Ferrisoluciones" class="nav-logo">
+                <span class="nav-title">Actualizar Transferencia</span>
+            </div>
+            <div class="nav-user">
+                <span id="user-display"></span>
+                <button onclick="logout()" class="btn-logout">
+                    <i class="fas fa-sign-out-alt"></i> Salir
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <!-- Loading State -->
+        <div id="loading" class="loading">Buscando registro...</div>
+        <div id="error-message" class="message error" style="display: none;"></div>
+
+        <div class="form-card" id="update-form-card" style="display: none;">
+            <h2 id="form-title"><i class="fas fa-camera"></i> Subir Comprobante</h2>
+
+            <form id="update-form">
+                <div class="form-grid">
+                    <div class="form-group full-width">
+                        <label><i class="fas fa-exchange-alt"></i> Tipo de Movimiento</label>
+                        <div class="tipo-buttons">
+                            <!-- Solo visual, no clickable/seleccionable -->
+                            <div class="tipo-btn active" data-tipo="ingreso"
+                                style="cursor: default; pointer-events: none;">
+                                <i class="fas fa-arrow-up"></i> Ingreso
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group full-width">
+                        <label><i class="fas fa-dollar-sign"></i> Monto ($)</label>
+                        <input type="number" id="monto" disabled class="input-readonly"
+                            style="background-color: #f0f0f0; cursor: not-allowed;">
+                    </div>
+
+                    <div class="form-group full-width">
+                        <label><i class="fas fa-comment-alt"></i> Motivo / Descripción</label>
+                        <textarea id="motivo" disabled rows="3"
+                            style="background-color: #f0f0f0; cursor: not-allowed;"></textarea>
+                    </div>
+
+                    <div class="form-group full-width">
+                        <label><i class="fas fa-camera"></i> Fotografía de Respaldo</label>
+
+                        <div class="foto-buttons">
+                            <button type="button" class="btn-foto btn-camara" id="btn-camara">
+                                <i class="fas fa-camera"></i> Tomar Foto
+                            </button>
+                            <button type="button" class="btn-foto btn-galeria" id="btn-galeria">
+                                <i class="fas fa-images"></i> Seleccionar de Galería
+                            </button>
+                        </div>
+
+                        <div id="foto-preview" style="display: none;">
+                            <img id="preview-img" src="" alt="Vista previa">
+                            <p class="preview-filename" id="preview-filename"></p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary" id="submit-btn">
+                        <i class="fas fa-save"></i> Actualizar y Enviar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal de confirmación personalizado (reutilizado styles) -->
+    <div id="confirm-modal" class="confirm-modal">
+        <div class="confirm-content">
+            <div class="confirm-header">
+                <h3><i class="fas fa-question-circle"></i> Confirmación</h3>
+            </div>
+            <div class="confirm-body">
+                Mensaje de confirmación
+            </div>
+            <div class="confirm-footer">
+                <button class="confirm-btn confirm-btn-cancel" id="confirm-cancel">
+                    <i class="fas fa-times"></i> Cancelar
+                </button>
+                <button class="confirm-btn confirm-btn-yes" id="confirm-yes">
+                    <i class="fas fa-check"></i> Sí, cambiar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="update.js"></script>
+</body>
+
+</html>

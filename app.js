@@ -1,6 +1,6 @@
 const supabaseUrl = 'https://lpsupabase.ferrisoluciones.com';
 const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.ewogICJyb2xlIjogImFub24iLAogICJpc3MiOiAic3VwYWJhc2UiLAogICJpYXQiOiAxNzE1MDUwODAwLAogICJleHAiOiAxODcyODE3MjAwCn0.mKBTuXoyxw3lXRGl1VpSlGbSeiMnRardlIx1q5n-o0k';
-const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
 
 // --- Lógica de Redirección y Bloqueo ---
 const urlParams = new URLSearchParams(window.location.search);
@@ -135,7 +135,7 @@ function setupViewFromCache() {
 }
 
 async function checkAuth() {
-    const { data: { session } } = await supabase.auth.getSession();
+    const { data: { session } } = await supabaseClient.auth.getSession();
 
     if (!session) {
         localStorage.removeItem('userRole');
@@ -147,7 +147,7 @@ async function checkAuth() {
 
     currentUser = session.user;
 
-    const { data: userData, error } = await supabase
+    const { data: userData, error } = await supabaseClient
         .from('usuarios_ferreteria')
         .select('*')
         .eq('user_id', currentUser.id)
@@ -193,7 +193,7 @@ function setupViewByRole(rol) {
 
 async function loadSaldo() {
     try {
-        const { data, error } = await supabase
+        const { data, error } = await supabaseClient
             .from('saldo_actual')
             .select('*')
             .eq('id', 1)
@@ -220,7 +220,7 @@ async function enrichTransferenciasWithNames(transferencias) {
     const emails = [...new Set(transferencias.map(t => t.subido_por).filter(e => e))];
     if (emails.length === 0) return transferencias;
 
-    const { data: usuarios, error } = await supabase
+    const { data: usuarios, error } = await supabaseClient
         .from('usuarios_ferreteria')
         .select('email, nombres, apellidos')
         .in('email', emails);
@@ -248,7 +248,7 @@ async function loadTransferencias() {
     errorMessage.style.display = 'none';
 
     try {
-        const { data, error } = await supabase
+        const { data, error } = await supabaseClient
             .from('transferencias')
             .select('*')
             .order('fechahora', { ascending: false });
@@ -281,7 +281,7 @@ async function loadTransferenciasDelDia() {
         fechaEcuador.setHours(0, 0, 0, 0);
         const inicioDia = fechaEcuador.toISOString();
 
-        const { data, error } = await supabase
+        const { data, error } = await supabaseClient
             .from('transferencias')
             .select('*')
             .gte('fechahora', inicioDia)
@@ -753,7 +753,7 @@ document.getElementById('transferencia-form').addEventListener('submit', async (
             subido_por: currentUser.email
         };
 
-        const { data, error } = await supabase
+        const { data, error } = await supabaseClient
             .from('transferencias')
             .insert([transferencia])
             .select();
@@ -770,7 +770,7 @@ document.getElementById('transferencia-form').addEventListener('submit', async (
             };
 
             try {
-                await notificarTransferencia(transferenciaCompleta, supabase);
+                await notificarTransferencia(transferenciaCompleta, supabaseClient);
             } catch (whatsappError) {
                 console.error('Error al enviar notificación:', whatsappError);
             }
@@ -875,7 +875,7 @@ window.onclick = (event) => {
 async function logout() {
     try {
         // Cerrar sesión en Supabase con scope local (evita el error 403)
-        await supabase.auth.signOut({ scope: 'local' });
+        await supabaseClient.auth.signOut({ scope: 'local' });
     } catch (error) {
         console.error('Error al cerrar sesión:', error);
         // Continuar con el logout aunque falle

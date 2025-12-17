@@ -1,6 +1,6 @@
 const supabaseUrl = 'https://lpsupabase.ferrisoluciones.com';
 const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.ewogICJyb2xlIjogImFub24iLAogICJpc3MiOiAic3VwYWJhc2UiLAogICJpYXQiOiAxNzE1MDUwODAwLAogICJleHAiOiAxODcyODE3MjAwCn0.mKBTuXoyxw3lXRGl1VpSlGbSeiMnRardlIx1q5n-o0k';
-const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
 
 const urlParams = new URLSearchParams(window.location.search);
 const idVenta = urlParams.get('v');
@@ -32,7 +32,7 @@ async function init() {
 }
 
 async function checkAuth() {
-    const { data: { session } } = await supabase.auth.getSession();
+    const { data: { session } } = await supabaseClient.auth.getSession();
 
     if (!session) {
         window.location.href = 'login.html';
@@ -42,7 +42,7 @@ async function checkAuth() {
     currentUser = session.user;
 
     // Intentar obtener datos del usuario para mostrar nombre (opcional)
-    const { data: userData } = await supabase
+    const { data: userData } = await supabaseClient
         .from('usuarios_ferreteria')
         .select('*')
         .eq('user_id', currentUser.id)
@@ -58,7 +58,7 @@ async function checkAuth() {
 
 async function loadTransferencia() {
     try {
-        const { data, error } = await supabase
+        const { data, error } = await supabaseClient
             .from('transferencias')
             .select('*')
             .eq('id_venta', idVenta)
@@ -246,7 +246,7 @@ document.getElementById('update-form').addEventListener('submit', async (e) => {
         const fotoUrl = await uploadPhotoToWebhook(currentPhoto, currentTransferencia.motivo);
 
         // 2. Actualizar Supabase
-        const { error } = await supabase
+        const { error } = await supabaseClient
             .from('transferencias')
             .update({
                 fotografia: fotoUrl,
@@ -287,7 +287,7 @@ document.getElementById('update-form').addEventListener('submit', async (e) => {
 });
 
 async function logout() {
-    await supabase.auth.signOut();
+    await supabaseClient.auth.signOut();
     window.location.href = 'login.html';
 }
 

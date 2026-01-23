@@ -1,5 +1,5 @@
-const supabaseUrl = 'https://lpsupabase.ferrisoluciones.com';
-const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.ewogICJyb2xlIjogImFub24iLAogICJpc3MiOiAic3VwYWJhc2UiLAogICJpYXQiOiAxNzE1MDUwODAwLAogICJleHAiOiAxODcyODE3MjAwCn0.mKBTuXoyxw3lXRGl1VpSlGbSeiMnRardlIx1q5n-o0k';
+const supabaseUrl = 'https://lpsupabase.luispintasolutions.com';
+const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.ewogICJyb2xlIjogImFub24iLAogICJpc3MiOiAic3VwYWJhc2UiLAogICJpYXQiOiAxNzE1MDUwODAwLAogICJleHAiOiAxODcyODE3MjAwCn0.LJEZ3yyGRxLBmCKM9z3EW-Yla1SszwbmvQMngMe3IWA';
 const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
 
 // --- Lógica de Redirección y Bloqueo ---
@@ -148,13 +148,20 @@ async function checkAuth() {
     currentUser = session.user;
 
     const { data: userData, error } = await supabaseClient
-        .from('usuarios_ferreteria')
+        .from('ferre_usuarios_ferreteria')
         .select('*')
         .eq('user_id', currentUser.id)
         .maybeSingle();
 
     if (error) {
         console.error('Error al cargar usuario:', error);
+        // Si el token no es válido para el nuevo servidor, forzar logout
+        if (error.code === 'PGRST301' || error.message?.includes('JWT')) {
+            await supabaseClient.auth.signOut();
+            localStorage.clear();
+            window.location.href = 'login.html';
+            return;
+        }
     }
 
     if (userData) {
@@ -194,7 +201,7 @@ function setupViewByRole(rol) {
 async function loadSaldo() {
     try {
         const { data, error } = await supabaseClient
-            .from('saldo_actual')
+            .from('ferre_saldo_actual')
             .select('*')
             .eq('id', 1)
             .single();
@@ -221,7 +228,7 @@ async function enrichTransferenciasWithNames(transferencias) {
     if (emails.length === 0) return transferencias;
 
     const { data: usuarios, error } = await supabaseClient
-        .from('usuarios_ferreteria')
+        .from('ferre_usuarios_ferreteria')
         .select('email, nombres, apellidos')
         .in('email', emails);
 
@@ -249,7 +256,7 @@ async function loadTransferencias() {
 
     try {
         const { data, error } = await supabaseClient
-            .from('transferencias')
+            .from('ferre_transferencias')
             .select('*')
             .order('fechahora', { ascending: false });
 
@@ -282,7 +289,7 @@ async function loadTransferenciasDelDia() {
         const inicioDia = fechaEcuador.toISOString();
 
         const { data, error } = await supabaseClient
-            .from('transferencias')
+            .from('ferre_transferencias')
             .select('*')
             .gte('fechahora', inicioDia)
             .order('fechahora', { ascending: false });
@@ -754,7 +761,7 @@ document.getElementById('transferencia-form').addEventListener('submit', async (
         };
 
         const { data, error } = await supabaseClient
-            .from('transferencias')
+            .from('ferre_transferencias')
             .insert([transferencia])
             .select();
 
@@ -1037,7 +1044,7 @@ document.head.appendChild(style);
 async function obtenerConfiguracionWhatsApp(supabase) {
     try {
         const { data, error } = await supabase
-            .from('ferredatos')
+            .from('ferre_ferredatos')
             .select('*')
             .limit(1)
             .single();

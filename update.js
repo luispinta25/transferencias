@@ -1,5 +1,5 @@
-const supabaseUrl = 'https://lpsupabase.ferrisoluciones.com';
-const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.ewogICJyb2xlIjogImFub24iLAogICJpc3MiOiAic3VwYWJhc2UiLAogICJpYXQiOiAxNzE1MDUwODAwLAogICJleHAiOiAxODcyODE3MjAwCn0.mKBTuXoyxw3lXRGl1VpSlGbSeiMnRardlIx1q5n-o0k';
+const supabaseUrl = 'https://lpsupabase.luispintasolutions.com';
+const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.ewogICJyb2xlIjogImFub24iLAogICJpc3MiOiAic3VwYWJhc2UiLAogICJpYXQiOiAxNzE1MDUwODAwLAogICJleHAiOiAxODcyODE3MjAwCn0.LJEZ3yyGRxLBmCKM9z3EW-Yla1SszwbmvQMngMe3IWA';
 const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
 
 const urlParams = new URLSearchParams(window.location.search);
@@ -42,11 +42,18 @@ async function checkAuth() {
     currentUser = session.user;
 
     // Intentar obtener datos del usuario para mostrar nombre (opcional)
-    const { data: userData } = await supabaseClient
-        .from('usuarios_ferreteria')
+    const { data: userData, error } = await supabaseClient
+        .from('ferre_usuarios_ferreteria')
         .select('*')
         .eq('user_id', currentUser.id)
         .maybeSingle();
+
+    if (error && (error.code === 'PGRST301' || error.message?.includes('JWT'))) {
+        await supabaseClient.auth.signOut();
+        localStorage.clear();
+        window.location.href = 'login.html';
+        return;
+    }
 
     const displayElement = document.getElementById('user-display');
     if (userData) {
@@ -59,7 +66,7 @@ async function checkAuth() {
 async function loadTransferencia() {
     try {
         const { data, error } = await supabaseClient
-            .from('transferencias')
+            .from('ferre_transferencias')
             .select('*')
             .eq('id_venta', idVenta)
             .maybeSingle();
@@ -247,7 +254,7 @@ document.getElementById('update-form').addEventListener('submit', async (e) => {
 
         // 2. Actualizar Supabase
         const { error } = await supabaseClient
-            .from('transferencias')
+            .from('ferre_transferencias')
             .update({
                 fotografia: fotoUrl,
                 user_id: currentUser.id,

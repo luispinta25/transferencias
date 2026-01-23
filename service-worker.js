@@ -1,11 +1,11 @@
 const CACHE_NAME = 'ferresoluciones-v13';
 const urlsToCache = [
-  'https://transferencias.ferrisoluciones.com/',
-  'https://transferencias.ferrisoluciones.com/index.html',
-  'https://transferencias.ferrisoluciones.com/login.html',
-  'https://transferencias.ferrisoluciones.com/styles.css',
-  'https://transferencias.ferrisoluciones.com/app.js',
-  'https://transferencias.ferrisoluciones.com/auth.js',
+  './',
+  './index.html',
+  './login.html',
+  './styles.css',
+  './app.js',
+  './auth.js',
   'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css',
   'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2'
 ];

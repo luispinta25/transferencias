@@ -111,7 +111,7 @@ _Powered by FERRESOLUCIONES Tech_`;
 async function obtenerConfiguracionWhatsApp(supabase) {
     try {
         const { data, error } = await supabase
-            .from('ferredatos')
+            .from('ferre_ferredatos')
             .select('*')
             .limit(1)
             .single();

@@ -65,7 +65,8 @@ async function checkAuth() {
 
 async function loadTransferencia() {
     try {
-        const { data, error } = await supabaseClient
+        // 1. Intentar buscar en transferencias (por si ya existe registro parcial)
+        let { data, error } = await supabaseClient
             .from('ferre_transferencias')
             .select('*')
             .eq('id_venta', idVenta)
@@ -73,8 +74,31 @@ async function loadTransferencia() {
 
         if (error) throw error;
 
+        // 2. Si no existe en transferencias, buscar en la tabla de ventas original
         if (!data) {
-            showError('No se encontró ninguna transferencia con este ID de venta.');
+            console.log('No encontrado en transferencias, buscando en ferre_ventas...');
+            const { data: ventaData, error: ventaError } = await supabaseClient
+                .from('ferre_ventas')
+                .select('*')
+                .eq('id_venta', idVenta)
+                .maybeSingle();
+
+            if (ventaError) throw ventaError;
+
+            if (ventaData) {
+                // Mapear datos de la venta al formato de transferencia
+                data = {
+                    id_venta: ventaData.id_venta,
+                    monto: ventaData.total,
+                    motivo: `Pago de venta ${ventaData.id_venta}`,
+                    caso: 'ingreso', // Por defecto las ventas son ingresos
+                    isNew: true // Flag para saber que debemos insertar en lugar de actualizar
+                };
+            }
+        }
+
+        if (!data) {
+            showError(`El ID de venta ${idVenta} no existe en transferencias ni en ventas.`);
             return;
         }
 
@@ -252,18 +276,34 @@ document.getElementById('update-form').addEventListener('submit', async (e) => {
         // 1. Subir Foto
         const fotoUrl = await uploadPhotoToWebhook(currentPhoto, currentTransferencia.motivo);
 
-        // 2. Actualizar Supabase
-        const { error } = await supabaseClient
-            .from('ferre_transferencias')
-            .update({
-                fotografia: fotoUrl,
-                user_id: currentUser.id,
-                subido_por: currentUser.email,
-                // created_at podría actualizarse si se requiere tracking de fecha de actualización real
-            })
-            .eq('id', currentTransferencia.id);
+        // 2. Actualizar o Insertar en Supabase
+        let result;
+        if (currentTransferencia.isNew) {
+            // Si es nuevo, insertamos
+            result = await supabaseClient
+                .from('ferre_transferencias')
+                .insert([{
+                    id_venta: idVenta,
+                    monto: currentTransferencia.monto,
+                    motivo: currentTransferencia.motivo,
+                    caso: 'ingreso',
+                    fotografia: fotoUrl,
+                    user_id: currentUser.id,
+                    subido_por: currentUser.email
+                }]);
+        } else {
+            // Si ya existe, actualizamos
+            result = await supabaseClient
+                .from('ferre_transferencias')
+                .update({
+                    fotografia: fotoUrl,
+                    user_id: currentUser.id,
+                    subido_por: currentUser.email,
+                })
+                .eq('id', currentTransferencia.id);
+        }
 
-        if (error) throw error;
+        if (result.error) throw result.error;
 
         // 3. Notificar Webhook
         await fetch('https://webhookn8n.ferrisoluciones.com/webhook/notificacion_actualizacion', {

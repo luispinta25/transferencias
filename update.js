@@ -118,9 +118,26 @@ function renderTransferencia(data) {
     montoInput.value = data.monto;
     motivoInput.value = data.motivo;
 
-    // Si ya existe foto, podríamos mostrarla o advertir, pero el requisito es actualizar
+    // Bloquear si ya existe fotografía
     if (data.fotografia) {
-        showMessage('Este registro ya tiene una fotografía. Al guardar se reemplazará.', 'info');
+        showMessage('Este registro ya cuenta con un comprobante. No se permiten actualizaciones.', 'error');
+        const submitBtn = document.getElementById('submit-btn');
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fas fa-lock"></i> Registro Bloqueado';
+        
+        // También ocultamos los botones de foto para evitar confusión
+        const fotoButtons = document.querySelector('.foto-buttons');
+        if (fotoButtons) fotoButtons.style.display = 'none';
+        
+        // Mostrar la foto actual
+        const fotoPreview = document.getElementById('foto-preview');
+        const previewImg = document.getElementById('preview-img');
+        const previewFilename = document.getElementById('preview-filename');
+        if (fotoPreview && previewImg) {
+            previewImg.src = data.fotografia;
+            previewFilename.textContent = 'Comprobante ya registrado';
+            fotoPreview.style.display = 'flex';
+        }
     }
 }
 
@@ -190,43 +207,75 @@ async function handlePhotoSelection(file) {
     reader.readAsDataURL(file);
 
     try {
-        currentPhoto = await compressImageIfNeeded(file);
-        previewFilename.textContent = `${file.name} → ${(currentPhoto.size / 1024 / 1024).toFixed(2)}MB`;
+        currentPhoto = await compressImageToWebP(file);
+        previewFilename.textContent = `${file.name} (WebP) → ${(currentPhoto.size / 1024 / 1024).toFixed(2)}MB`;
     } catch (error) {
         console.error('Error compresión:', error);
         currentPhoto = file;
     }
 }
 
-// Copiada de app.js (versión simplificada)
-async function compressImageIfNeeded(file, maxSizeMB = 1) {
-    if (file.size <= maxSizeMB * 1024 * 1024) return file;
-
+// Función para convertir a WebP (80% calidad)
+async function compressImageToWebP(file, quality = 0.8) {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
-        reader.onload = (e) => {
+
+        reader.onerror = (error) => {
+            reject(error);
+        };
+
+        reader.onload = (event) => {
             const img = new Image();
+
+            img.onerror = (error) => {
+                reject(error);
+            };
+
             img.onload = () => {
                 const canvas = document.createElement('canvas');
-                let width = img.width, height = img.height;
-                const maxDim = 1920;
+                let width = img.width;
+                let height = img.height;
 
-                if (width > maxDim || height > maxDim) {
-                    if (width > height) { height = Math.round((height / width) * maxDim); width = maxDim; }
-                    else { width = Math.round((width / height) * maxDim); height = maxDim; }
+                // Reducir dimensiones si son muy grandes (max 1920px)
+                const maxDimension = 1920;
+                if (width > maxDimension || height > maxDimension) {
+                    if (width > height) {
+                        height = Math.round((height / width) * maxDimension);
+                        width = maxDimension;
+                    } else {
+                        width = Math.round((width / height) * maxDimension);
+                        height = maxDimension;
+                    }
                 }
 
                 canvas.width = width;
                 canvas.height = height;
+
                 const ctx = canvas.getContext('2d');
                 ctx.drawImage(img, 0, 0, width, height);
 
-                canvas.toBlob(blob => {
-                    resolve(new File([blob], file.name, { type: 'image/jpeg', lastModified: Date.now() }));
-                }, 'image/jpeg', 0.7);
+                canvas.toBlob(
+                    (blob) => {
+                        if (!blob) {
+                            reject(new Error('No se pudo comprimir la imagen'));
+                            return;
+                        }
+
+                        const webpFile = new File([blob], file.name.replace(/\.[^/.]+$/, "") + ".webp", {
+                            type: 'image/webp',
+                            lastModified: Date.now()
+                        });
+
+                        resolve(webpFile);
+                    },
+                    'image/webp',
+                    quality
+                );
             };
-            img.src = e.target.result;
+
+            img.src = event.target.result;
         };
+
         reader.readAsDataURL(file);
     });
 }
@@ -241,28 +290,95 @@ btnGaleria.addEventListener('click', async () => {
     handlePhotoSelection(file);
 });
 
-// --- Subida y Actualización ---
+// Función para subir foto a Supabase Bucket y notificar a n8n
+async function uploadPhotoToSupabase(file, motivo, originalMessageId = null) {
+    try {
+        const ahora = new Date();
+        const dia = String(ahora.getDate()).padStart(2, '0');
+        const hora = String(ahora.getHours()).padStart(2, '0') + String(ahora.getMinutes()).padStart(2, '0');
+        const seg = String(ahora.getSeconds()).padStart(2, '0');
 
-async function uploadPhotoToWebhook(file, motivo) {
-    const formData = new FormData();
-    const ahora = new Date();
-    const meses = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'];
-    const path = `/FERRESOLUCIONES/TRANSFERENCIAS/${meses[ahora.getMonth()]}/`;
-    const filename = `${String(ahora.getDate()).padStart(2, '0')}_${String(ahora.getHours()).padStart(2, '0')}${String(ahora.getMinutes()).padStart(2, '0')}_${motivo.substring(0, 15).replace(/[^a-zA-Z0-9]/g, '_')}.PNG`;
+        const motivoLimpio = (motivo || 'UPDATE').substring(0, 30).replace(/[^a-zA-Z0-9]/g, '_').toUpperCase();
+        // Generar un nombre único con segundos para evitar colisiones
+        const filename = `${dia}_${hora}${seg}_${motivoLimpio}.webp`;
 
-    formData.append('file', new File([file], filename, { type: file.type }));
-    formData.append('path', path);
-    formData.append('filename', filename);
+        const path = `transferencias/${filename}`;
 
-    const response = await fetch('https://webhookn8n.ferrisoluciones.com/webhook/87f1603e-86ad-4547-8a87-a5d9f9b02115', { method: 'POST', body: formData });
-    if (!response.ok) throw new Error('Error al subir foto');
+        console.log('Subiendo a Supabase:', path);
 
-    const data = await response.json();
-    return (Array.isArray(data) && data[0]?.finalurl) ? data[0].finalurl : (data.finalurl || data.url);
+        // Subir al bucket 'ferrisoluciones'
+        const { data: uploadData, error: uploadError } = await supabaseClient
+            .storage
+            .from('ferrisoluciones')
+            .upload(path, file, {
+                cacheControl: '3600',
+                upsert: false
+            });
+
+        if (uploadError) {
+            console.error('Error al subir a Supabase:', uploadError);
+            throw uploadError;
+        }
+
+        // Obtener la URL pública
+        const { data: { publicUrl } } = supabaseClient
+            .storage
+            .from('ferrisoluciones')
+            .getPublicUrl(path);
+
+        console.log('URL pública generada:', publicUrl);
+
+        // Enviar al nuevo webhook de n8n
+        let messageId = null;
+        try {
+            const webhookResponse = await fetch('https://lpn8nwebhook.luispintasolutions.com/webhook/a93e51ea-2752-4a11-9190-49460bb0745f', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    url: publicUrl,
+                    filename: filename,
+                    motivo: motivo,
+                    transferencia_id: Date.now(),
+                    id_message_original: originalMessageId, // Incluimos el ID original si existe
+                    tipo: 'subida_directa_supabase_update',
+                    fecha: ahora.toISOString()
+                })
+            });
+            console.log('Notificación enviada a n8n:', webhookResponse.status);
+
+            if (webhookResponse.ok) {
+                const dataResponse = await webhookResponse.json();
+                if (Array.isArray(dataResponse) && dataResponse.length > 0) {
+                    messageId = dataResponse[0].data?.key?.id;
+                } else if (dataResponse.data?.key?.id) {
+                    messageId = dataResponse.data.key.id;
+                }
+                if (messageId) console.log('MessageId capturado desde n8n:', messageId);
+            }
+        } catch (webhookErr) {
+            console.warn('Error al enviar notificación a n8n, pero la subida fue exitosa:', webhookErr);
+        }
+
+        return { publicUrl, messageId };
+    } catch (error) {
+        console.error('Error en uploadPhotoToSupabase:', error);
+        throw error;
+    }
+}
+async function uploadPhotoToWebhook(file, motivo, originalMessageId = null) {
+    return await uploadPhotoToSupabase(file, motivo, originalMessageId);
 }
 
 document.getElementById('update-form').addEventListener('submit', async (e) => {
     e.preventDefault();
+
+    if (currentTransferencia && currentTransferencia.fotografia) {
+        showMessage('Este registro ya tiene un comprobante y no puede ser modificado.', 'error');
+        return;
+    }
+
     if (!currentPhoto) {
         showMessage('Debes seleccionar una foto', 'error');
         return;
@@ -273,8 +389,14 @@ document.getElementById('update-form').addEventListener('submit', async (e) => {
     submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Procesando...';
 
     try {
-        // 1. Subir Foto
-        const fotoUrl = await uploadPhotoToWebhook(currentPhoto, currentTransferencia.motivo);
+        // 1. Subir Foto (Pasamos el ID de mensaje original si existe)
+        const resultUpload = await uploadPhotoToSupabase(
+            currentPhoto, 
+            currentTransferencia.motivo, 
+            currentTransferencia.id_message
+        );
+        const fotoUrl = resultUpload.publicUrl;
+        const msgId = resultUpload.messageId;
 
         // 2. Actualizar o Insertar en Supabase
         let result;
@@ -289,37 +411,29 @@ document.getElementById('update-form').addEventListener('submit', async (e) => {
                     caso: 'ingreso',
                     fotografia: fotoUrl,
                     user_id: currentUser.id,
-                    subido_por: currentUser.email
+                    subido_por: currentUser.email,
+                    id_message: msgId
                 }]);
         } else {
             // Si ya existe, actualizamos
+            const updateData = {
+                fotografia: fotoUrl,
+                user_id: currentUser.id,
+                subido_por: currentUser.email,
+            };
+            
+            // Si el webhook devolvió un nuevo ID de mensaje, lo actualizamos también
+            if (msgId) {
+                updateData.id_message = msgId;
+            }
+
             result = await supabaseClient
                 .from('ferre_transferencias')
-                .update({
-                    fotografia: fotoUrl,
-                    user_id: currentUser.id,
-                    subido_por: currentUser.email,
-                })
+                .update(updateData)
                 .eq('id', currentTransferencia.id);
         }
 
         if (result.error) throw result.error;
-
-        // 3. Notificar Webhook
-        await fetch('https://webhookn8n.ferrisoluciones.com/webhook/notificacion_actualizacion', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                tipo: 'actualizacion_transferencia',
-                id_venta: idVenta,
-                monto: currentTransferencia.monto,
-                motivo: currentTransferencia.motivo,
-                usuario: currentUser.email,
-                foto_url: fotoUrl,
-                id_message: currentTransferencia.id_message,
-                mensaje: `Transferencia actualizada por ${currentUser.email}. ID Venta: ${idVenta}`
-            })
-        });
 
         showMessage('Actualización exitosa', 'success');
         setTimeout(() => window.location.reload(), 2000);

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ferresoluciones-v13';
+const CACHE_NAME = 'ferresoluciones-v16';
 const urlsToCache = [
   'https://transferencias.ferrisoluciones.com/',
   'https://transferencias.ferrisoluciones.com/index.html',
@@ -43,9 +43,18 @@ self.addEventListener('fetch', event => {
   
   const url = new URL(request.url);
 
+  // Manejar favicon.ico para evitar 404
+  if (url.pathname === '/favicon.ico') {
+    event.respondWith(
+      fetch('https://lh3.googleusercontent.com/d/1bqJM3Qw96FEIo4QSjHyn-n8laPHpfS1C=w2048')
+        .catch(() => new Response(null, { status: 204 }))
+    );
+    return;
+  }
+
   if (
     url.hostname.includes('supabase') ||
-    url.hostname.includes('ferrisoluciones') ||
+    
     url.hostname.includes('cdn.jsdelivr.net')
   ) {
     event.respondWith(fetch(request));

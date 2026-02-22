@@ -1,7 +1,7 @@
 const SUPABASE_URL = 'https://lpsupabase.ferrisoluciones.com';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.ewogICJyb2xlIjogImFub24iLAogICJpc3MiOiAic3VwYWJhc2UiLAogICJpYXQiOiAxNzE1MDUwODAwLAogICJleHAiOiAxODcyODE3MjAwCn0.mKBTuXoyxw3lXRGl1VpSlGbSeiMnRardlIx1q5n-o0k';
 
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 let isLogin = true;
 
@@ -18,10 +18,10 @@ const toggleText = document.getElementById('toggle-text');
 const authSubtitle = document.getElementById('auth-subtitle');
 const messageDiv = document.getElementById('message');
 
-// Clear any stale session data before attempting Supabase auth
+// Clear any stale session data before attempting supabaseClient auth
 async function resetClientAuthState() {
     try {
-        await supabase.auth.signOut({ scope: 'local' });
+        await supabaseClient.auth.signOut({ scope: 'local' });
     } catch (error) {
         console.warn('La sesion previa ya estaba limpia o no pudo cerrarse.', error);
     }
@@ -99,7 +99,7 @@ async function handleAuth(e) {
 }
 
 async function loginUser(email, password) {
-    const { data, error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await supabaseClient.auth.signInWithPassword({
         email,
         password
     });
@@ -107,7 +107,7 @@ async function loginUser(email, password) {
     if (error) throw error;
 
     // Obtener el rol del usuario inmediatamente después del login
-    const { data: userData, error: userError } = await supabase
+    const { data: userData, error: userError } = await supabaseClient
         .from('usuarios_ferreteria')
         .select('rol, nombres, apellidos')
         .eq('user_id', data.user.id)
@@ -137,7 +137,7 @@ async function registerUser(email, password) {
         throw new Error('Por favor completa todos los campos');
     }
 
-    const { data, error } = await supabase.auth.signUp({
+    const { data, error } = await supabaseClient.auth.signUp({
         email,
         password,
         options: {
@@ -197,7 +197,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (isLoggingOut) {
         // Si viene de un logout, asegurar que la sesión esté limpia
         try {
-            await supabase.auth.signOut({ scope: 'local' });
+            await supabaseClient.auth.signOut({ scope: 'local' });
         } catch (error) {
             console.log('Sesión ya cerrada');
         }
@@ -208,7 +208,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     
     // Solo redirigir a index si hay sesión válida y NO viene de logout
-    const { data: { session } } = await supabase.auth.getSession();
+    const { data: { session } } = await supabaseClient.auth.getSession();
     
     if (session) {
         window.location.href = 'index.html';

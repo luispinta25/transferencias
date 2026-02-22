@@ -1,6 +1,95 @@
-const supabaseUrl = 'https://lpsupabase.ferrisoluciones.com';
-const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.ewogICJyb2xlIjogImFub24iLAogICJpc3MiOiAic3VwYWJhc2UiLAogICJpYXQiOiAxNzE1MDUwODAwLAogICJleHAiOiAxODcyODE3MjAwCn0.mKBTuXoyxw3lXRGl1VpSlGbSeiMnRardlIx1q5n-o0k';
-const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
+const SB_URL = 'https://lpsupabase.luispintasolutions.com';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.ewogICJyb2xlIjogImFub24iLAogICJpc3MiOiAic3VwYWJhc2UiLAogICJpYXQiOiAxNzE1MDUwODAwLAogICJleHAiOiAxODcyODE3MjAwCn0.LJEZ3yyGRxLBmCKM9z3EW-Yla1SszwbmvQMngMe3IWA';
+const sb = window.supabase.createClient(SB_URL, SB_KEY);
+
+// --- Lógica de Redirección y Bloqueo ---
+const urlParams = new URLSearchParams(window.location.search);
+const ventaParam = urlParams.get('v');
+
+if (ventaParam) {
+    // Si existe el parámetro v, redirigir al modo actualización
+    window.location.href = `update.html?v=${ventaParam}`;
+} else {
+    // Si NO existe el parámetro, activar bloqueo de Modo Directo
+    document.addEventListener('DOMContentLoaded', () => {
+        const modalVerificacion = document.getElementById('modal-verificacion');
+        // Mostrar modal y bloquear cierre (no tiene botón de cerrar ni cierra al click fuera)
+        modalVerificacion.style.display = 'flex';
+        modalVerificacion.style.alignItems = 'center';
+        modalVerificacion.style.justifyContent = 'center';
+
+        const btnSolicitar = document.getElementById('btn-solicitar-codigo');
+        const btnVerificar = document.getElementById('btn-verificar-codigo');
+        const inputCodigo = document.getElementById('codigo-verificacion');
+        const msgVerificacion = document.getElementById('msg-verificacion');
+
+        // Generar código aleatorio de 6 caracteres
+        function generarCodigo() {
+            const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+            let codigo = '';
+            for (let i = 0; i < 6; i++) {
+                codigo += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
+            return codigo;
+        }
+
+        let codigoGenerado = null;
+
+        btnSolicitar.addEventListener('click', async () => {
+            btnSolicitar.disabled = true;
+            btnSolicitar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Solicitando...';
+            msgVerificacion.textContent = '';
+            msgVerificacion.style.color = '#333';
+
+            try {
+                codigoGenerado = generarCodigo();
+                console.log('Código generado (para debug):', codigoGenerado);
+
+                // Enviar webhook con el código y mensaje formateado
+                const response = await fetch('https://lpn8nwebhook.luispintasolutions.com/webhook/simple_sin_respuesta', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        tipo: 'solicitud_acceso_directo',
+                        mensaje: `🔐 *Código de Verificación*\n\nSu código es: *${codigoGenerado}*\n\nUse este código para acceder al sistema de TRANSFERENCIAS.`,
+                        fecha: new Date().toISOString()
+                    })
+                });
+
+                if (response.ok) {
+                    msgVerificacion.textContent = 'Código enviado correctamente. Revise su notficación.';
+                    msgVerificacion.style.color = 'green';
+                } else {
+                    throw new Error('Error al enviar código');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                msgVerificacion.textContent = 'Error al solicitar código. Intente nuevamente.';
+                msgVerificacion.style.color = 'red';
+            } finally {
+                btnSolicitar.disabled = false;
+                btnSolicitar.innerHTML = '<i class="fas fa-key"></i> Solicitar Nuevo Código';
+            }
+        });
+
+        btnVerificar.addEventListener('click', () => {
+            const codigoIngresado = inputCodigo.value.toUpperCase().trim();
+
+            // Backdoor estático temporal o lógica solo con código generado
+            if (codigoGenerado && codigoIngresado === codigoGenerado) {
+                modalVerificacion.style.display = 'none';
+                showMessage('Modo Directo Activado', 'success');
+            } else {
+                msgVerificacion.textContent = 'Código incorrecto.';
+                msgVerificacion.style.color = 'red';
+                inputCodigo.classList.add('campo-error');
+                setTimeout(() => inputCodigo.classList.remove('campo-error'), 1000);
+            }
+        });
+    });
+}
 
 let currentUser = null;
 let currentUserData = null;
@@ -18,16 +107,16 @@ function setupViewFromCache() {
     const cachedRole = localStorage.getItem('userRole');
     const cachedNombres = localStorage.getItem('userNombres');
     const cachedApellidos = localStorage.getItem('userApellidos');
-    
+
     if (cachedRole) {
         if (cachedNombres && cachedApellidos) {
             document.getElementById('user-email').textContent = cachedNombres + ' ' + cachedApellidos;
         }
-        
+
         const formCard = document.querySelector('.form-card');
         const statsGrid = document.querySelector('.stats-grid');
         const container = document.querySelector('.container');
-        
+
         if (cachedRole === 'admin' || cachedRole === 'contador') {
             saldoCard.style.display = 'block';
             filtersCard.style.display = 'flex';
@@ -39,15 +128,15 @@ function setupViewFromCache() {
             statsGrid.style.marginTop = '30px';
         }
     }
-    
+
     setTimeout(() => {
         document.body.classList.add('loaded');
     }, 100);
 }
 
 async function checkAuth() {
-    const { data: { session } } = await supabaseClient.auth.getSession();
-    
+    const { data: { session } } = await sb.auth.getSession();
+
     if (!session) {
         localStorage.removeItem('userRole');
         localStorage.removeItem('userNombres');
@@ -57,17 +146,24 @@ async function checkAuth() {
     }
 
     currentUser = session.user;
-    
-    const { data: userData, error } = await supabaseClient
-        .from('usuarios_ferreteria')
+
+    const { data: userData, error } = await sb
+        .from('ferre_usuarios_ferreteria')
         .select('*')
         .eq('user_id', currentUser.id)
         .maybeSingle();
-    
+
     if (error) {
         console.error('Error al cargar usuario:', error);
+        // Si el token no es válido para el nuevo servidor, forzar logout
+        if (error.code === 'PGRST301' || error.message?.includes('JWT')) {
+            await sb.auth.signOut();
+            localStorage.clear();
+            window.location.href = 'login.html';
+            return;
+        }
     }
-    
+
     if (userData) {
         currentUserData = userData;
         localStorage.setItem('userRole', userData.rol);
@@ -86,7 +182,7 @@ function setupViewByRole(rol) {
     const formCard = document.querySelector('.form-card');
     const statsGrid = document.querySelector('.stats-grid');
     const container = document.querySelector('.container');
-    
+
     if (rol === 'admin' || rol === 'contador') {
         saldoCard.style.display = 'block';
         filtersCard.style.display = 'flex';
@@ -104,20 +200,20 @@ function setupViewByRole(rol) {
 
 async function loadSaldo() {
     try {
-        const { data, error } = await supabaseClient
-            .from('saldo_actual')
+        const { data, error } = await sb
+            .from('ferre_saldo_actual')
             .select('*')
             .eq('id', 1)
             .single();
-        
+
         if (error) throw error;
-        
+
         if (data) {
-            document.getElementById('saldo-total').textContent = 
+            document.getElementById('saldo-total').textContent =
                 '$' + parseFloat(data.monto_total || 0).toFixed(2);
-            
+
             const fecha = new Date(data.ultima_actualizacion);
-            document.getElementById('ultima-actualizacion').textContent = 
+            document.getElementById('ultima-actualizacion').textContent =
                 fecha.toLocaleString('es-ES');
         }
     } catch (error) {
@@ -127,27 +223,27 @@ async function loadSaldo() {
 
 async function enrichTransferenciasWithNames(transferencias) {
     if (!transferencias || transferencias.length === 0) return transferencias;
-    
+
     const emails = [...new Set(transferencias.map(t => t.subido_por).filter(e => e))];
     if (emails.length === 0) return transferencias;
-    
-    const { data: usuarios, error } = await supabaseClient
-        .from('usuarios_ferreteria')
+
+    const { data: usuarios, error } = await sb
+        .from('ferre_usuarios_ferreteria')
         .select('email, nombres, apellidos')
         .in('email', emails);
-    
+
     if (error) {
         console.error('Error al cargar nombres de usuarios:', error);
         return transferencias;
     }
-    
+
     const emailToName = {};
     if (usuarios) {
         usuarios.forEach(u => {
             emailToName[u.email] = u.nombres + ' ' + u.apellidos;
         });
     }
-    
+
     return transferencias.map(t => ({
         ...t,
         subido_por_nombre: emailToName[t.subido_por] || t.subido_por || 'N/A'
@@ -157,19 +253,19 @@ async function enrichTransferenciasWithNames(transferencias) {
 async function loadTransferencias() {
     loading.style.display = 'block';
     errorMessage.style.display = 'none';
-    
+
     try {
-        const { data, error } = await supabaseClient
-            .from('transferencias')
+        const { data, error } = await sb
+            .from('ferre_transferencias')
             .select('*')
             .order('fechahora', { ascending: false });
-        
+
         if (error) throw error;
-        
+
         allTransferencias = await enrichTransferenciasWithNames(data || []);
         calculateStats(allTransferencias);
         renderTransferencias(allTransferencias);
-        
+
     } catch (error) {
         console.error('Error:', error);
         errorMessage.textContent = 'Error al cargar transferencias: ' + error.message;
@@ -182,7 +278,7 @@ async function loadTransferencias() {
 async function loadTransferenciasDelDia() {
     loading.style.display = 'block';
     errorMessage.style.display = 'none';
-    
+
     try {
         const ahora = new Date();
         const ecuadorOffset = -5 * 60;
@@ -191,19 +287,19 @@ async function loadTransferenciasDelDia() {
         const fechaEcuador = new Date(ahora.getTime() + diferenciaMinutos * 60000);
         fechaEcuador.setHours(0, 0, 0, 0);
         const inicioDia = fechaEcuador.toISOString();
-        
-        const { data, error } = await supabaseClient
-            .from('transferencias')
+
+        const { data, error } = await sb
+            .from('ferre_transferencias')
             .select('*')
             .gte('fechahora', inicioDia)
             .order('fechahora', { ascending: false });
-        
+
         if (error) throw error;
-        
+
         allTransferencias = await enrichTransferenciasWithNames(data || []);
         calculateStatsDelDia(allTransferencias);
         renderTransferencias(allTransferencias);
-        
+
     } catch (error) {
         console.error('Error:', error);
         errorMessage.textContent = 'Error al cargar transferencias: ' + error.message;
@@ -217,11 +313,11 @@ function calculateStats(data) {
     const totalIngresos = data
         .filter(t => t.caso === 'ingreso')
         .reduce((sum, t) => sum + parseFloat(t.monto || 0), 0);
-    
+
     const totalEgresos = data
         .filter(t => t.caso === 'egreso')
         .reduce((sum, t) => sum + parseFloat(t.monto || 0), 0);
-    
+
     document.getElementById('total-ingresos').textContent = '$' + totalIngresos.toFixed(2);
     document.getElementById('total-egresos').textContent = '$' + totalEgresos.toFixed(2);
     document.getElementById('total-transacciones').textContent = data.length;
@@ -231,21 +327,21 @@ function calculateStatsDelDia(data) {
     const totalIngresos = data
         .filter(t => t.caso === 'ingreso')
         .reduce((sum, t) => sum + parseFloat(t.monto || 0), 0);
-    
+
     const totalEgresos = data
         .filter(t => t.caso === 'egreso')
         .reduce((sum, t) => sum + parseFloat(t.monto || 0), 0);
-    
+
     const fechaHoy = new Date();
     const opciones = { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'America/Guayaquil' };
     const fechaFormateada = fechaHoy.toLocaleDateString('es-EC', opciones);
-    
-    document.querySelector('.stat-card.ingreso .stat-label').innerHTML = 
+
+    document.querySelector('.stat-card.ingreso .stat-label').innerHTML =
         '<i class="fas fa-calendar-day"></i> Ingresos de Hoy<br><small style="font-size: 0.75em; opacity: 0.8;">' + fechaFormateada + '</small>';
-    document.querySelector('.stat-card.egreso .stat-label').innerHTML = 
+    document.querySelector('.stat-card.egreso .stat-label').innerHTML =
         '<i class="fas fa-calendar-day"></i> Egresos de Hoy<br><small style="font-size: 0.75em; opacity: 0.8;">' + fechaFormateada + '</small>';
     document.querySelector('.stat-card.total').style.display = 'none';
-    
+
     document.getElementById('total-ingresos').textContent = '$' + totalIngresos.toFixed(2);
     document.getElementById('total-egresos').textContent = '$' + totalEgresos.toFixed(2);
 }
@@ -259,17 +355,17 @@ function renderTransferencias(data) {
     tbody.innerHTML = data.map((t, index) => {
         const fecha = new Date(t.fechahora);
         const fechaFormato = fecha.toLocaleDateString('es-ES');
-        const horaFormato = fecha.toLocaleTimeString('es-ES', { 
-            hour: '2-digit', 
-            minute: '2-digit' 
+        const horaFormato = fecha.toLocaleTimeString('es-ES', {
+            hour: '2-digit',
+            minute: '2-digit'
         });
-        
-        const badgeIcon = t.caso === 'ingreso' ? 
-            '<i class="fas fa-arrow-up"></i> Ingreso' : 
+
+        const badgeIcon = t.caso === 'ingreso' ?
+            '<i class="fas fa-arrow-up"></i> Ingreso' :
             '<i class="fas fa-arrow-down"></i> Egreso';
-        
+
         const signo = t.caso === 'ingreso' ? '+' : '-';
-        
+
         return '<tr class="transferencia-row" data-index="' + index + '" style="cursor: pointer;">' +
             '<td><div style="font-weight: 600;">' + fechaFormato + '</div><div style="font-size: 0.9em; color: #666;">' + horaFormato + '</div></td>' +
             '<td><span class="badge badge-' + t.caso + '">' + badgeIcon + '</span></td>' +
@@ -278,7 +374,7 @@ function renderTransferencias(data) {
             '<td><div style="font-size: 0.9em;"><i class="fas fa-user"></i> ' + (t.subido_por_nombre || t.subido_por || 'N/A') + '</div></td>' +
             '</tr>';
     }).join('');
-    
+
     document.querySelectorAll('.transferencia-row').forEach(row => {
         row.addEventListener('click', () => {
             const index = parseInt(row.dataset.index);
@@ -290,18 +386,18 @@ function renderTransferencias(data) {
 function filterTransferencias() {
     const searchTerm = searchInput.value.toLowerCase();
     const casoFilter = filterCaso.value;
-    
+
     const filtered = allTransferencias.filter(t => {
         const matchesSearch = t.motivo.toLowerCase().includes(searchTerm);
         const matchesCaso = !casoFilter || t.caso === casoFilter;
         return matchesSearch && matchesCaso;
     });
-    
+
     renderTransferencias(filtered);
 }
 
 document.querySelectorAll('.tipo-btn').forEach(btn => {
-    btn.addEventListener('click', function() {
+    btn.addEventListener('click', function () {
         document.querySelectorAll('.tipo-btn').forEach(b => b.classList.remove('active'));
         this.classList.add('active');
         document.getElementById('caso').value = this.dataset.tipo;
@@ -327,17 +423,17 @@ function showConfirmModal(message) {
         const confirmBody = document.querySelector('.confirm-body');
         confirmBody.textContent = message;
         confirmModal.style.display = 'block';
-        
+
         confirmYesBtn.onclick = () => {
             confirmModal.style.display = 'none';
             resolve(true);
         };
-        
+
         confirmCancelBtn.onclick = () => {
             confirmModal.style.display = 'none';
             resolve(false);
         };
-        
+
         // Cerrar al hacer clic fuera del modal
         confirmModal.onclick = (e) => {
             if (e.target === confirmModal) {
@@ -419,7 +515,7 @@ btnGaleria.addEventListener('click', async () => {
 // Manejar selección de foto (cámara o galería)
 async function handlePhotoSelection(file) {
     if (!file) return;
-    
+
     // Mostrar preview del archivo original
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -428,14 +524,14 @@ async function handlePhotoSelection(file) {
         fotoPreview.style.display = 'flex';
     };
     reader.readAsDataURL(file);
-    
+
     // Comprimir en segundo plano
     try {
-        const compressedFile = await compressImageIfNeeded(file);
+        const compressedFile = await compressImageToWebP(file);
         currentPhoto = compressedFile;
-        
+
         // Actualizar el nombre del archivo en el preview con el tamaño comprimido
-        previewFilename.textContent = `${file.name} → ${(compressedFile.size / 1024 / 1024).toFixed(2)}MB`;
+        previewFilename.textContent = `${file.name} (WebP) → ${(compressedFile.size / 1024 / 1024).toFixed(2)}MB`;
     } catch (error) {
         console.error('Error al comprimir:', error);
         currentPhoto = file;
@@ -444,34 +540,26 @@ async function handlePhotoSelection(file) {
 
 // Entradas dinámicas manejan la selección, no se necesitan listeners directos
 
-// Función para comprimir imagen si es necesaria
-async function compressImageIfNeeded(file, maxSizeMB = 1) {
-    const maxSizeBytes = maxSizeMB * 1024 * 1024;
-    
-    // Si el archivo es menor a 1MB, no comprimir
-    if (file.size <= maxSizeBytes) {
-        return file;
-    }
-    
+async function compressImageToWebP(file, quality = 0.8) {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
-        
+
         reader.onerror = (error) => {
             reject(error);
         };
-        
+
         reader.onload = (event) => {
             const img = new Image();
-            
+
             img.onerror = (error) => {
                 reject(error);
             };
-            
+
             img.onload = () => {
                 const canvas = document.createElement('canvas');
                 let width = img.width;
                 let height = img.height;
-                
+
                 // Reducir dimensiones si son muy grandes (max 1920px)
                 const maxDimension = 1920;
                 if (width > maxDimension || height > maxDimension) {
@@ -483,133 +571,147 @@ async function compressImageIfNeeded(file, maxSizeMB = 1) {
                         height = maxDimension;
                     }
                 }
-                
+
                 canvas.width = width;
                 canvas.height = height;
-                
+
                 const ctx = canvas.getContext('2d');
                 ctx.drawImage(img, 0, 0, width, height);
-                
-                // Comprimir con calidad adaptativa
-                let quality = 0.7;
-                const originalSizeMB = file.size / 1024 / 1024;
-                
-                if (originalSizeMB > 10) {
-                    quality = 0.5;
-                } else if (originalSizeMB > 5) {
-                    quality = 0.6;
-                } else if (originalSizeMB > 3) {
-                    quality = 0.65;
-                }
-                
+
                 canvas.toBlob(
                     (blob) => {
                         if (!blob) {
                             reject(new Error('No se pudo comprimir la imagen'));
                             return;
                         }
-                        
-                        const compressedFile = new File([blob], file.name, {
-                            type: 'image/jpeg',
+
+                        const webpFile = new File([blob], file.name.replace(/\.[^/.]+$/, "") + ".webp", {
+                            type: 'image/webp',
                             lastModified: Date.now()
                         });
-                        
-                        resolve(compressedFile);
+
+                        resolve(webpFile);
                     },
-                    'image/jpeg',
+                    'image/webp',
                     quality
                 );
             };
-            
+
             img.src = event.target.result;
         };
-        
+
         reader.readAsDataURL(file);
     });
 }
 
-// Función para subir foto al webhook
-async function uploadPhotoToWebhook(file, motivo) {
+// Función para subir foto a Supabase Bucket y notificar a n8n
+async function uploadPhotoToSupabase(file, motivo, originalMessageId = null) {
     try {
-        const formData = new FormData();
-    
-    // Generar path y filename
-    const ahora = new Date();
-    const meses = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 
-                   'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'];
-    const mes = meses[ahora.getMonth()];
-    const dia = String(ahora.getDate()).padStart(2, '0');
-    const hora = String(ahora.getHours()).padStart(2, '0') + String(ahora.getMinutes()).padStart(2, '0');
-    
-    const path = `/FERRESOLUCIONES/TRANSFERENCIAS/${mes}/`;
-    const motivoLimpio = motivo.substring(0, 30).replace(/[^a-zA-Z0-9]/g, '_').toUpperCase();
-    const filename = `${dia}_${hora}_${motivoLimpio}.PNG`;
-    
-    // Crear un nuevo archivo con el nombre correcto (file ya viene comprimido)
-    const renamedFile = new File([file], filename, { type: file.type });
-    
-    formData.append('file', renamedFile);
-    formData.append('path', path);
-    formData.append('filename', filename);
-    
-    const response = await fetch('https://webhookn8n.ferrisoluciones.com/webhook/87f1603e-86ad-4547-8a87-a5d9f9b02115', {
-        method: 'POST',
-        body: formData
-    });
-    
-    if (!response.ok) {
-        throw new Error('Error al subir la foto');
-    }
-    
-    const data = await response.json();
-    console.log('Respuesta del webhook:', data);
-    
-    // Verificar que la respuesta tenga el formato correcto
-    if (Array.isArray(data) && data.length > 0 && data[0].finalurl) {
-        return data[0].finalurl;
-    } else if (Array.isArray(data) && data.length > 0 && data[0].url) {
-        return data[0].url;
-    } else if (data.finalurl) {
-        return data.finalurl;
-    } else if (data.url) {
-        return data.url;
-    } else {
-        throw new Error('Respuesta del webhook inválida');
-    }
+        const ahora = new Date();
+        const dia = String(ahora.getDate()).padStart(2, '0');
+        const hora = String(ahora.getHours()).padStart(2, '0') + String(ahora.getMinutes()).padStart(2, '0');
+        const seg = String(ahora.getSeconds()).padStart(2, '0');
+
+        const motivoLimpio = motivo.substring(0, 30).replace(/[^a-zA-Z0-9]/g, '_').toUpperCase();
+        // Generar un nombre único con segundos para evitar colisiones
+        const filename = `${dia}_${hora}${seg}_${motivoLimpio}.webp`;
+
+        const path = `transferencias/${filename}`;
+
+        console.log('Subiendo a Supabase:', path);
+
+        // Subir al bucket 'ferrisoluciones'
+        const { data: uploadData, error: uploadError } = await sb
+            .storage
+            .from('ferrisoluciones')
+            .upload(path, file, {
+                cacheControl: '3600',
+                upsert: false
+            });
+
+        if (uploadError) {
+            console.error('Error al subir a Supabase:', uploadError);
+            throw uploadError;
+        }
+
+        // Obtener la URL pública
+        const { data: { publicUrl } } = sb
+            .storage
+            .from('ferrisoluciones')
+            .getPublicUrl(path);
+
+        console.log('URL pública generada:', publicUrl);
+
+        // Enviar al nuevo webhook de n8n
+        let messageId = null;
+        try {
+            const webhookResponse = await fetch('https://lpn8nwebhook.luispintasolutions.com/webhook/a93e51ea-2752-4a11-9190-49460bb0745f', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    url: publicUrl,
+                    filename: filename,
+                    motivo: motivo,
+                    transferencia_id: Date.now(), // ID temporal para rastreo
+                    id_message_original: originalMessageId, // Incluimos el ID original si existe
+                    tipo: 'subida_directa_supabase',
+                    fecha: ahora.toISOString()
+                })
+            });
+            console.log('Notificación enviada a n8n:', webhookResponse.status);
+            
+            if (webhookResponse.ok) {
+                const dataResponse = await webhookResponse.json();
+                // Extraer el id de la estructura proporcionada por el usuario
+                if (Array.isArray(dataResponse) && dataResponse.length > 0) {
+                    messageId = dataResponse[0].data?.key?.id;
+                } else if (dataResponse.data?.key?.id) {
+                    messageId = dataResponse.data.key.id;
+                }
+                if (messageId) console.log('MessageId capturado desde n8n:', messageId);
+            }
+        } catch (webhookErr) {
+            console.warn('Error al enviar notificación a n8n, pero la subida fue exitosa:', webhookErr);
+        }
+
+        return { publicUrl, messageId };
     } catch (error) {
-        console.error('Error en uploadPhotoToWebhook:', error);
+        console.error('Error en uploadPhotoToSupabase:', error);
         throw error;
     }
 }
 
+
 // Función para validar campos y mostrar errores
 function validarCampos() {
     let camposVacios = [];
-    
+
     // Obtener elementos
     const montoInput = document.getElementById('monto');
     const motivoInput = document.getElementById('motivo');
     const fotoButtonsDiv = document.querySelector('.foto-buttons');
-    
+
     // Remover clases de error previas
     document.querySelectorAll('.campo-error, .campo-error-foto').forEach(el => {
         el.classList.remove('campo-error', 'campo-error-foto');
     });
-    
+
     // Validar monto
     if (!montoInput.value || parseFloat(montoInput.value) <= 0) {
         montoInput.classList.add('campo-error');
         camposVacios.push('Monto');
         setTimeout(() => montoInput.classList.remove('campo-error'), 1500);
     }
-    
+
     // Validar motivo
     if (!motivoInput.value.trim()) {
         motivoInput.classList.add('campo-error');
         camposVacios.push('Motivo');
         setTimeout(() => motivoInput.classList.remove('campo-error'), 1500);
     }
-    
+
     // Validar foto
     if (!currentPhoto) {
         if (fotoButtonsDiv) {
@@ -621,72 +723,61 @@ function validarCampos() {
         }
         camposVacios.push('Fotografía');
     }
-    
+
     return camposVacios;
 }
 
 document.getElementById('transferencia-form').addEventListener('submit', async (e) => {
     e.preventDefault();
-    
+
     // Validar campos
     const camposVacios = validarCampos();
-    
+
     if (camposVacios.length > 0) {
         showMessage('Por favor completa todos los campos requeridos', 'error');
         return;
     }
-    
+
     const submitBtn = document.getElementById('submit-btn');
     const originalText = submitBtn.innerHTML;
     submitBtn.disabled = true;
     submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Subiendo foto...';
-    
+
     try {
         const motivo = document.getElementById('motivo').value;
-        
-        // Primero subir la foto al webhook
-        const fotoURL = await uploadPhotoToWebhook(currentPhoto, motivo);
-        
+
+        // Primero subir la foto a Supabase Bucket
+        const resultUpload = await uploadPhotoToSupabase(currentPhoto, motivo);
+        const fotoURL = resultUpload.publicUrl;
+        const msgId = resultUpload.messageId;
+
         submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Guardando...';
-        
+
         // Obtener el nombre completo del usuario
         let nombreCompleto = currentUser.email;
         if (currentUserData && currentUserData.nombres && currentUserData.apellidos) {
             nombreCompleto = currentUserData.nombres + ' ' + currentUserData.apellidos;
         }
-        
+
         const transferencia = {
             caso: document.getElementById('caso').value,
             monto: parseFloat(document.getElementById('monto').value),
             motivo: motivo,
             fotografia: fotoURL,
             user_id: currentUser.id,
-            subido_por: currentUser.email
+            subido_por: currentUser.email,
+            id_message: msgId // Guardamos el ID que viene del webhook inicial
         };
-        
-        const { data, error } = await supabaseClient
-            .from('transferencias')
+
+        const { data, error } = await sb
+            .from('ferre_transferencias')
             .insert([transferencia])
             .select();
-        
+
         if (error) throw error;
-        
-        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enviando notificación...';
-        
-        if (data && data[0]) {
-            const transferenciaCompleta = {
-                ...data[0],
-                foto_url: fotoURL,
-                subido_por_nombre: nombreCompleto
-            };
-            
-            try {
-                await notificarTransferencia(transferenciaCompleta, supabaseClient);
-            } catch (whatsappError) {
-                console.error('Error al enviar notificación:', whatsappError);
-            }
-        }
-        
+
+        showMessage('Transferencia guardada exitosamente', 'success');
+
         e.target.reset();
         currentPhoto = null;
         fotoPreview.style.display = 'none';
@@ -694,16 +785,14 @@ document.getElementById('transferencia-form').addEventListener('submit', async (
         document.querySelectorAll('.tipo-btn').forEach(b => b.classList.remove('active'));
         document.querySelector('.tipo-btn[data-tipo="ingreso"]').classList.add('active');
         document.getElementById('caso').value = 'ingreso';
-        
+
         if (currentUserData && (currentUserData.rol === 'admin' || currentUserData.rol === 'contador')) {
             loadSaldo();
             loadTransferencias();
         } else {
             loadTransferenciasDelDia();
         }
-        
-        showMessage('Transferencia guardada exitosamente', 'success');
-        
+
     } catch (error) {
         console.error('Error:', error);
         showMessage('Error al guardar: ' + error.message, 'error');
@@ -716,7 +805,7 @@ document.getElementById('transferencia-form').addEventListener('submit', async (
 function showMessage(text, type) {
     const messageDiv = document.createElement('div');
     messageDiv.className = 'alert alert-' + type;
-    messageDiv.style.cssText = 
+    messageDiv.style.cssText =
         'position: fixed;' +
         'top: 80px;' +
         'right: 20px;' +
@@ -728,9 +817,9 @@ function showMessage(text, type) {
         'z-index: 1000;' +
         'animation: slideIn 0.3s ease-out;';
     messageDiv.textContent = text;
-    
+
     document.body.appendChild(messageDiv);
-    
+
     setTimeout(() => {
         messageDiv.style.animation = 'slideOut 0.3s ease-in';
         setTimeout(() => messageDiv.remove(), 300);
@@ -750,26 +839,26 @@ function mostrarModal(transferencia) {
         hour: '2-digit',
         minute: '2-digit'
     });
-    
-    const tipoHTML = transferencia.caso === 'ingreso' ? 
+
+    const tipoHTML = transferencia.caso === 'ingreso' ?
         '<span class="badge badge-ingreso"><i class="fas fa-arrow-up"></i> Ingreso</span>' :
         '<span class="badge badge-egreso"><i class="fas fa-arrow-down"></i> Egreso</span>';
-    
+
     const signo = transferencia.caso === 'ingreso' ? '+' : '-';
-    
+
     document.getElementById('modal-fecha').textContent = fechaFormato;
     document.getElementById('modal-tipo').innerHTML = tipoHTML;
     document.getElementById('modal-monto').innerHTML = '<strong class="monto-' + transferencia.caso + '">' + signo + '$' + parseFloat(transferencia.monto).toFixed(2) + '</strong>';
     document.getElementById('modal-subido').textContent = transferencia.subido_por_nombre || transferencia.subido_por || 'N/A';
     document.getElementById('modal-motivo').textContent = transferencia.motivo;
-    
+
     if (transferencia.fotografia) {
         document.getElementById('modal-img').src = transferencia.fotografia;
         document.getElementById('modal-img').style.display = 'block';
     } else {
         document.getElementById('modal-img').style.display = 'none';
     }
-    
+
     modal.style.display = 'block';
 }
 
@@ -785,21 +874,21 @@ window.onclick = (event) => {
 
 async function logout() {
     try {
-        // Cerrar sesión en supabaseClient con scope local (evita el error 403)
-        await supabaseClient.auth.signOut({ scope: 'local' });
+        // Cerrar sesión en Supabase con scope local (evita el error 403)
+        await sb.auth.signOut({ scope: 'local' });
     } catch (error) {
         console.error('Error al cerrar sesión:', error);
         // Continuar con el logout aunque falle
     }
-    
+
     // Limpiar localStorage
     localStorage.removeItem('userRole');
     localStorage.removeItem('userNombres');
     localStorage.removeItem('userApellidos');
-    
+
     // Limpiar sessionStorage también
     sessionStorage.clear();
-    
+
     // Redirigir al login con parámetro de logout y replace para evitar volver atrás
     window.location.replace('login.html?logout=true');
 }
@@ -844,19 +933,19 @@ function mostrarModalLista(tipo) {
     if (modalTitle) {
         modalTitle.innerHTML = `<i class="fas fa-list"></i> Lista de ${titulo}`;
     }
-    
+
     // Filter items
     currentListaItems = allTransferencias.filter(t => t.caso === tipo);
     currentListaPage = 0;
-    
+
     if (modalListaTbody) {
         modalListaTbody.innerHTML = '';
     }
-    
+
     if (modalLista) {
         modalLista.style.display = 'block';
     }
-    
+
     cargarMasItems();
 }
 
@@ -864,11 +953,11 @@ function cargarMasItems() {
     const start = currentListaPage * ITEMS_PER_PAGE;
     const end = start + ITEMS_PER_PAGE;
     const itemsToShow = currentListaItems.slice(start, end);
-    
+
     renderListaItems(itemsToShow);
-    
+
     currentListaPage++;
-    
+
     if (modalListaActions) {
         if (end >= currentListaItems.length) {
             modalListaActions.style.display = 'none';
@@ -884,10 +973,10 @@ function renderListaItems(items) {
     const html = items.map(t => {
         const fecha = new Date(t.fechahora);
         const fechaFormato = fecha.toLocaleDateString('es-ES') + ' ' + fecha.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
-        
+
         // Escape single quotes for the onclick handler
         const tString = JSON.stringify(t).replace(/'/g, "&#39;").replace(/"/g, "&quot;");
-        
+
         return `
             <tr>
                 <td>${fechaFormato}</td>
@@ -901,7 +990,7 @@ function renderListaItems(items) {
             </tr>
         `;
     }).join('');
-    
+
     modalListaTbody.insertAdjacentHTML('beforeend', html);
 }
 
@@ -918,7 +1007,7 @@ checkAuth();
 
 // Estilos para animaciones
 const style = document.createElement('style');
-style.textContent = 
+style.textContent =
     '@keyframes slideIn {' +
     '    from {' +
     '        transform: translateX(400px);' +
@@ -945,10 +1034,10 @@ document.head.appendChild(style);
 // FUNCIONES DE NOTIFICACIÓN WHATSAPP
 // =====================================================
 
-async function obtenerConfiguracionWhatsApp(supabaseClient) {
+async function obtenerConfiguracionWhatsApp(sb_arg) {
     try {
-        const { data, error } = await supabaseClient
-            .from('ferredatos')
+        const { data, error } = await sb_arg
+            .from('ferre_ferredatos')
             .select('*')
             .limit(1)
             .single();
@@ -1011,10 +1100,10 @@ _Powered by FERRESOLUCIONES Tech_`;
         const bodyData = {
             number: ferredatos.number,
             mediatype: 'image',
-            mimetype: 'image/jpeg',
+            mimetype: 'image/webp',
             caption: mensaje,
             media: transferencia.foto_url,
-            fileName: `TRANSFERENCIA_${fechaFormateada.replace(/\//g, '-')}_${horaFormateada.replace(/:/g, '-')}.jpg`,
+            fileName: `TRANSFERENCIA_${fechaFormateada.replace(/\//g, '-')}_${horaFormateada.replace(/:/g, '-')}.webp`,
             delay: 1000,
             linkPreview: false
         };
@@ -1044,9 +1133,9 @@ _Powered by FERRESOLUCIONES Tech_`;
     }
 }
 
-async function notificarTransferencia(transferencia, supabaseClient) {
+async function notificarTransferencia(transferencia, sb_arg) {
     try {
-        const ferredatos = await obtenerConfiguracionWhatsApp(supabaseClient);
+        const ferredatos = await obtenerConfiguracionWhatsApp(sb_arg);
 
         if (!ferredatos) {
             return { success: false, error: 'Configuración no disponible' };

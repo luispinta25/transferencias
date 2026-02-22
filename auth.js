@@ -1,5 +1,5 @@
-const SUPABASE_URL = 'https://lpsupabase.ferrisoluciones.com';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.ewogICJyb2xlIjogImFub24iLAogICJpc3MiOiAic3VwYWJhc2UiLAogICJpYXQiOiAxNzE1MDUwODAwLAogICJleHAiOiAxODcyODE3MjAwCn0.mKBTuXoyxw3lXRGl1VpSlGbSeiMnRardlIx1q5n-o0k';
+const SUPABASE_URL = 'https://lpsupabase.luispintasolutions.com';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.ewogICJyb2xlIjogImFub24iLAogICJpc3MiOiAic3VwYWJhc2UiLAogICJpYXQiOiAxNzE1MDUwODAwLAogICJleHAiOiAxODcyODE3MjAwCn0.LJEZ3yyGRxLBmCKM9z3EW-Yla1SszwbmvQMngMe3IWA';
 
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
@@ -18,7 +18,7 @@ const toggleText = document.getElementById('toggle-text');
 const authSubtitle = document.getElementById('auth-subtitle');
 const messageDiv = document.getElementById('message');
 
-// Clear any stale session data before attempting supabaseClient auth
+// Clear any stale session data before attempting Supabase auth
 async function resetClientAuthState() {
     try {
         await supabaseClient.auth.signOut({ scope: 'local' });
@@ -76,7 +76,7 @@ toggleLink.addEventListener('click', toggleAuthMode);
 
 async function handleAuth(e) {
     e.preventDefault();
-    
+
     const email = emailInput.value.trim();
     const password = passwordInput.value;
 
@@ -108,7 +108,7 @@ async function loginUser(email, password) {
 
     // Obtener el rol del usuario inmediatamente después del login
     const { data: userData, error: userError } = await supabaseClient
-        .from('usuarios_ferreteria')
+        .from('ferre_usuarios_ferreteria')
         .select('rol, nombres, apellidos')
         .eq('user_id', data.user.id)
         .maybeSingle();
@@ -193,7 +193,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Verificar si hay un parámetro de logout en la URL
     const urlParams = new URLSearchParams(window.location.search);
     const isLoggingOut = urlParams.get('logout') === 'true';
-    
+
     if (isLoggingOut) {
         // Si viene de un logout, asegurar que la sesión esté limpia
         try {
@@ -201,15 +201,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         } catch (error) {
             console.log('Sesión ya cerrada');
         }
-        
+
         // Limpiar URL sin recargar
         window.history.replaceState({}, document.title, window.location.pathname);
         return;
     }
-    
+
     // Solo redirigir a index si hay sesión válida y NO viene de logout
     const { data: { session } } = await supabaseClient.auth.getSession();
-    
+
     if (session) {
         window.location.href = 'index.html';
     }

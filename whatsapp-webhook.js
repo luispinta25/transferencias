@@ -75,10 +75,10 @@ _Powered by FERRESOLUCIONES Tech_`;
             body: JSON.stringify({
                 number: ferredatos.number,
                 mediatype: 'image',
-                mimetype: 'image/jpeg',
+                mimetype: 'image/webp',
                 caption: mensaje,
                 media: transferencia.foto_url,
-                fileName: `TRANSFERENCIA_${fechaFormateada.replace(/\//g, '-')}_${horaFormateada.replace(/:/g, '-')}.jpg`,
+                fileName: `TRANSFERENCIA_${fechaFormateada.replace(/\//g, '-')}_${horaFormateada.replace(/:/g, '-')}.webp`,
                 delay: 1000,
                 linkPreview: false
             })
@@ -111,7 +111,7 @@ _Powered by FERRESOLUCIONES Tech_`;
 async function obtenerConfiguracionWhatsApp(supabase) {
     try {
         const { data, error } = await supabase
-            .from('ferredatos')
+            .from('ferre_ferredatos')
             .select('*')
             .limit(1)
             .single();

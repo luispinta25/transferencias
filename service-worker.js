@@ -1,4 +1,4 @@
-const CACHE_NAME = 'ferresoluciones-v16';
+const CACHE_NAME = 'ferresoluciones-v17';
 const urlsToCache = [
   'https://transferencias.ferrisoluciones.com/',
   'https://transferencias.ferrisoluciones.com/index.html',
@@ -54,10 +54,8 @@ self.addEventListener('fetch', event => {
 
   if (
     url.hostname.includes('supabase') ||
-    
     url.hostname.includes('cdn.jsdelivr.net')
   ) {
-    event.respondWith(fetch(request));
     return;
   }
 

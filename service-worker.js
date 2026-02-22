@@ -1,12 +1,11 @@
-const CACHE_NAME = 'ferresoluciones-v14';
+const CACHE_NAME = 'ferresoluciones-v13';
 const urlsToCache = [
-  './',
-  './index.html',
-  './login.html',
-  './styles.css',
-  './app.js',
-  './auth.js',
-  './update.js',
+  'https://transferencias.ferrisoluciones.com/',
+  'https://transferencias.ferrisoluciones.com/index.html',
+  'https://transferencias.ferrisoluciones.com/login.html',
+  'https://transferencias.ferrisoluciones.com/styles.css',
+  'https://transferencias.ferrisoluciones.com/app.js',
+  'https://transferencias.ferrisoluciones.com/auth.js',
   'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css',
   'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2'
 ];
@@ -38,39 +37,70 @@ self.addEventListener('activate', event => {
 self.addEventListener('fetch', event => {
   const { request } = event;
   
-  // No cachear peticiones POST o fuera de HTTP
-  if (request.method !== 'GET' || !request.url.startsWith('http')) {
+  if (!request.url.startsWith('http')) {
     return;
   }
   
   const url = new URL(request.url);
 
-  // No cachear llamadas a Supabase ni Webhooks (Siempre Network)
   if (
     url.hostname.includes('supabase') ||
-    url.hostname.includes('luispintasolutions.com') ||
-    url.hostname.includes('ferrisoluciones')
+    url.hostname.includes('ferrisoluciones') ||
+    url.hostname.includes('cdn.jsdelivr.net')
   ) {
     event.respondWith(fetch(request));
     return;
   }
 
-  // --- ESTRATEGIA: NETWORK FIRST ---
-  // Intentamos obtener del internet primero para asegurar última versión.
-  // Si falla (offline), servimos desde caché.
-  event.respondWith(
-    fetch(request)
-      .then(networkResponse => {
+  if (request.destination === 'script' || request.url.endsWith('.js')) {
+    event.respondWith((async () => {
+      try {
+        const networkResponse = await fetch(request);
+
         if (networkResponse && networkResponse.ok) {
-          const responseToCache = networkResponse.clone();
-          caches.open(CACHE_NAME).then(cache => {
-            cache.put(request, responseToCache);
-          });
+          try {
+            const cache = await caches.open(CACHE_NAME);
+            await cache.put(request, networkResponse.clone());
+          } catch (cacheError) {
+            console.log('Error al cachear script:', cacheError);
+          }
         }
+
         return networkResponse;
-      })
-      .catch(() => {
-        return caches.match(request);
-      })
-  );
+      } catch (error) {
+        const cachedResponse = await caches.match(request);
+        if (cachedResponse) {
+          return cachedResponse;
+        }
+        throw error;
+      }
+    })());
+    return;
+  }
+
+  if (request.method === 'GET') {
+    event.respondWith(
+      caches.match(request)
+        .then(response => {
+          if (response) {
+            return response;
+          }
+          return fetch(request).then(response => {
+            if (!response || response.status !== 200 || response.type === 'error') {
+              return response;
+            }
+            const responseToCache = response.clone();
+            caches.open(CACHE_NAME)
+              .then(cache => cache.put(request, responseToCache))
+              .catch(err => console.log('Error al cachear:', err));
+            return response;
+          });
+        })
+        .catch(() => {
+          if (request.destination === 'document') {
+            return caches.match('https://transferencias.ferrisoluciones.com/index.html');
+          }
+        })
+    );
+  }
 });

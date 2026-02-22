@@ -45,15 +45,15 @@ if (ventaParam) {
                 codigoGenerado = generarCodigo();
                 console.log('Código generado (para debug):', codigoGenerado);
 
-                // Enviar webhook con el código
-                const response = await fetch('https://webhookn8n.ferrisoluciones.com/webhook/codigo', {
+                // Enviar webhook con el código y mensaje formateado
+                const response = await fetch('https://lpn8nwebhook.luispintasolutions.com/webhook/simple_sin_respuesta', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
                         tipo: 'solicitud_acceso_directo',
-                        codigo: codigoGenerado,
+                        mensaje: `🔐 *Código de Verificación*\n\nSu código es: *${codigoGenerado}*\n\nUse este código para acceder al sistema de TRANSFERENCIAS.`,
                         fecha: new Date().toISOString()
                     })
                 });

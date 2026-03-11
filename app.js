@@ -604,6 +604,15 @@ async function compressImageToWebP(file, quality = 0.8) {
     });
 }
 
+function construirMensajeTransferenciaDirecta({ caso, monto, motivo }) {
+    const tipoMovimiento = caso === 'egreso' ? 'Egreso' : 'Ingreso';
+    const iconoTipo = caso === 'egreso' ? '💸' : '💰';
+    const montoFormateado = Number.parseFloat(monto || 0).toFixed(2);
+    const motivoLimpio = (motivo || '').trim();
+
+    return `✨ *Se ha subido una nueva transferencia directa*\n\n${iconoTipo} *Tipo:* ${tipoMovimiento}\n💵 *Monto:* $${montoFormateado}\n📝 *Motivo:* ${motivoLimpio}\n\n📸 *Comprobante adjunto*`;
+}
+
 // Función para subir foto a Supabase Bucket y notificar a n8n
 async function uploadPhotoToSupabase(file, motivo, originalMessageId = null) {
     try {
@@ -612,7 +621,12 @@ async function uploadPhotoToSupabase(file, motivo, originalMessageId = null) {
         const hora = String(ahora.getHours()).padStart(2, '0') + String(ahora.getMinutes()).padStart(2, '0');
         const seg = String(ahora.getSeconds()).padStart(2, '0');
 
-        const motivoLimpio = motivo.substring(0, 30).replace(/[^a-zA-Z0-9]/g, '_').toUpperCase();
+        const datosTransferencia = typeof motivo === 'object' && motivo !== null
+            ? motivo
+            : { motivo };
+        const motivoTexto = (datosTransferencia.motivo || '').trim();
+        const captionElegante = construirMensajeTransferenciaDirecta(datosTransferencia);
+        const motivoLimpio = motivoTexto.substring(0, 30).replace(/[^a-zA-Z0-9]/g, '_').toUpperCase();
         // Generar un nombre único con segundos para evitar colisiones
         const filename = `${dia}_${hora}${seg}_${motivoLimpio}.webp`;
 
@@ -653,7 +667,11 @@ async function uploadPhotoToSupabase(file, motivo, originalMessageId = null) {
                 body: JSON.stringify({
                     url: publicUrl,
                     filename: filename,
-                    motivo: motivo,
+                    motivo: motivoTexto,
+                    caso: datosTransferencia.caso || null,
+                    monto: datosTransferencia.monto || null,
+                    mensaje: captionElegante,
+                    caption: captionElegante,
                     transferencia_id: Date.now(), // ID temporal para rastreo
                     id_message_original: originalMessageId, // Incluimos el ID original si existe
                     tipo: 'subida_directa_supabase',
@@ -744,10 +762,16 @@ document.getElementById('transferencia-form').addEventListener('submit', async (
     submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Subiendo foto...';
 
     try {
-        const motivo = document.getElementById('motivo').value;
+        const motivo = document.getElementById('motivo').value.trim();
+        const caso = document.getElementById('caso').value;
+        const monto = parseFloat(document.getElementById('monto').value);
 
         // Primero subir la foto a Supabase Bucket
-        const resultUpload = await uploadPhotoToSupabase(currentPhoto, motivo);
+        const resultUpload = await uploadPhotoToSupabase(currentPhoto, {
+            motivo,
+            caso,
+            monto
+        });
         const fotoURL = resultUpload.publicUrl;
         const msgId = resultUpload.messageId;
 
@@ -760,8 +784,8 @@ document.getElementById('transferencia-form').addEventListener('submit', async (
         }
 
         const transferencia = {
-            caso: document.getElementById('caso').value,
-            monto: parseFloat(document.getElementById('monto').value),
+            caso,
+            monto,
             motivo: motivo,
             fotografia: fotoURL,
             user_id: currentUser.id,

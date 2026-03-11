@@ -1,6 +1,7 @@
 {
   "name": "TRANSFERENCIAS",
   "short_name": "TRANSFERENCIAS",
+  "version": "1.0.1",
   "description": "Sistema de gestión de transferencias financieras",
   "start_url": "https://transferencias.ferrisoluciones.com/index.html",
   "display": "standalone",

@@ -44,6 +44,13 @@ body.loaded {
     gap: 15px;
 }
 
+.nav-brand-copy {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
 .nav-logo {
     height: 40px;
     width: auto;
@@ -52,6 +59,20 @@ body.loaded {
 .nav-title {
     font-size: 1.4em;
     font-weight: 700;
+}
+
+.app-version-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: rgba(212, 160, 23, 0.18);
+    border: 1px solid rgba(212, 160, 23, 0.45);
+    color: #f3d37a;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
 }
 
 .nav-user {

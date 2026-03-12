@@ -290,6 +290,27 @@ btnGaleria.addEventListener('click', async () => {
     handlePhotoSelection(file);
 });
 
+function construirMensajeActualizacionVenta({ idVenta, monto, motivo }) {
+    const montoFormateado = Number.parseFloat(monto || 0).toFixed(2);
+    const partes = [
+        '✅ *La venta ha sido actualizada correctamente.*',
+        '',
+        `💵 *Monto:* $${montoFormateado}`
+    ];
+
+    if (idVenta) {
+        partes.push(`🧾 *Venta:* ${idVenta}`);
+    }
+
+    if ((motivo || '').trim()) {
+        partes.push(`📝 *Motivo:* ${(motivo || '').trim()}`);
+    }
+
+    partes.push('', '📸 *Comprobante actualizado*');
+
+    return partes.join('\n');
+}
+
 // Función para subir foto a Supabase Bucket y notificar a n8n
 async function uploadPhotoToSupabase(file, motivo, originalMessageId = null) {
     try {
@@ -298,7 +319,12 @@ async function uploadPhotoToSupabase(file, motivo, originalMessageId = null) {
         const hora = String(ahora.getHours()).padStart(2, '0') + String(ahora.getMinutes()).padStart(2, '0');
         const seg = String(ahora.getSeconds()).padStart(2, '0');
 
-        const motivoLimpio = (motivo || 'UPDATE').substring(0, 30).replace(/[^a-zA-Z0-9]/g, '_').toUpperCase();
+        const datosActualizacion = typeof motivo === 'object' && motivo !== null
+            ? motivo
+            : { motivo };
+        const motivoTexto = (datosActualizacion.motivo || '').trim();
+        const captionAmigable = construirMensajeActualizacionVenta(datosActualizacion);
+        const motivoLimpio = (motivoTexto || 'UPDATE').substring(0, 30).replace(/[^a-zA-Z0-9]/g, '_').toUpperCase();
         // Generar un nombre único con segundos para evitar colisiones
         const filename = `${dia}_${hora}${seg}_${motivoLimpio}.webp`;
 
@@ -339,7 +365,11 @@ async function uploadPhotoToSupabase(file, motivo, originalMessageId = null) {
                 body: JSON.stringify({
                     url: publicUrl,
                     filename: filename,
-                    motivo: motivo,
+                    motivo: motivoTexto,
+                    monto: datosActualizacion.monto || null,
+                    id_venta: datosActualizacion.idVenta || null,
+                    mensaje: captionAmigable,
+                    caption: captionAmigable,
                     transferencia_id: Date.now(),
                     id_message_original: originalMessageId, // Incluimos el ID original si existe
                     tipo: 'subida_directa_supabase_update',
@@ -392,7 +422,11 @@ document.getElementById('update-form').addEventListener('submit', async (e) => {
         // 1. Subir Foto (Pasamos el ID de mensaje original si existe)
         const resultUpload = await uploadPhotoToSupabase(
             currentPhoto, 
-            currentTransferencia.motivo, 
+            {
+                motivo: currentTransferencia.motivo,
+                monto: currentTransferencia.monto,
+                idVenta: idVenta
+            }, 
             currentTransferencia.id_message
         );
         const fotoUrl = resultUpload.publicUrl;

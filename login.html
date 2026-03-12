@@ -197,7 +197,7 @@
             <img src="https://lh3.googleusercontent.com/d/1bqJM3Qw96FEIo4QSjHyn-n8laPHpfS1C=w2048" alt="Ferresoluciones" class="logo">
             <h1 id="auth-title">Iniciar Sesión</h1>
             <p id="auth-subtitle"><i class="fas fa-exchange-alt"></i> Gestión de Transferencias</p>
-            <div class="login-version">v1.0.1</div>
+            <div class="login-version">v1.0.2</div>
         </div>
 
         <div class="login-body">
@@ -242,10 +242,47 @@
         // Registrar Service Worker para PWA
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
+                let refreshing = false;
+
+                navigator.serviceWorker.addEventListener('controllerchange', () => {
+                    if (refreshing) {
+                        return;
+                    }
+
+                    refreshing = true;
+                    window.location.reload();
+                });
+
                 navigator.serviceWorker.register('/service-worker.js', {
-                    scope: '/'
+                    scope: '/',
+                    updateViaCache: 'none'
                 })
                     .then(registration => {
+                        const activarActualizacion = (worker) => {
+                            if (worker) {
+                                worker.postMessage({ type: 'SKIP_WAITING' });
+                            }
+                        };
+
+                        registration.update();
+
+                        if (registration.waiting) {
+                            activarActualizacion(registration.waiting);
+                        }
+
+                        registration.addEventListener('updatefound', () => {
+                            const newWorker = registration.installing;
+                            if (!newWorker) {
+                                return;
+                            }
+
+                            newWorker.addEventListener('statechange', () => {
+                                if (newWorker.state === 'installed') {
+                                    activarActualizacion(newWorker);
+                                }
+                            });
+                        });
+
                         console.log('Service Worker registrado:', registration);
                     })
                     .catch(error => {

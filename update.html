@@ -18,7 +18,7 @@
                     alt="Ferrisoluciones" class="nav-logo">
                 <div class="nav-brand-copy">
                     <span class="nav-title">Actualizar Transferencia</span>
-                    <span class="app-version-badge">v1.0.1</span>
+                    <span class="app-version-badge">v1.0.2</span>
                 </div>
             </div>
             <div class="nav-user">
@@ -113,6 +113,56 @@
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="update.js"></script>
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                let refreshing = false;
+
+                navigator.serviceWorker.addEventListener('controllerchange', () => {
+                    if (refreshing) {
+                        return;
+                    }
+
+                    refreshing = true;
+                    window.location.reload();
+                });
+
+                navigator.serviceWorker.register('/service-worker.js', {
+                    scope: '/',
+                    updateViaCache: 'none'
+                })
+                    .then(registration => {
+                        const activarActualizacion = (worker) => {
+                            if (worker) {
+                                worker.postMessage({ type: 'SKIP_WAITING' });
+                            }
+                        };
+
+                        registration.update();
+
+                        if (registration.waiting) {
+                            activarActualizacion(registration.waiting);
+                        }
+
+                        registration.addEventListener('updatefound', () => {
+                            const newWorker = registration.installing;
+                            if (!newWorker) {
+                                return;
+                            }
+
+                            newWorker.addEventListener('statechange', () => {
+                                if (newWorker.state === 'installed') {
+                                    activarActualizacion(newWorker);
+                                }
+                            });
+                        });
+                    })
+                    .catch(error => {
+                        console.log('Error al registrar Service Worker:', error);
+                    });
+            });
+        }
+    </script>
 </body>
 
 </html>

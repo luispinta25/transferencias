@@ -1,4 +1,4 @@
-const APP_VERSION = '2.1.0';
+const APP_VERSION = '2.1.1';
 const CACHE_NAME = `ferresoluciones-v${APP_VERSION}`;
 const urlsToCache = [
   '/',
@@ -26,7 +26,11 @@ async function networkFirst(request) {
   const cache = await caches.open(CACHE_NAME);
 
   try {
-    const networkResponse = await fetch(request);
+    // 'no-store' fuerza a saltar el cache HTTP del navegador (no solo el de
+    // este service worker): sin esto, fetch(request) puede resolverse con
+    // una copia en disco vieja de app.js/index.html sin ni siquiera tocar la
+    // red, y una actualización nueva no se nota hasta que esa copia expira.
+    const networkResponse = await fetch(request, { cache: 'no-store' });
 
     if (shouldCacheResponse(request, networkResponse)) {
       await cache.put(request, networkResponse.clone());

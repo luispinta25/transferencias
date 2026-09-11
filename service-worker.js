@@ -1,4 +1,4 @@
-const APP_VERSION = '1.0.3';
+const APP_VERSION = '2.0.0';
 const CACHE_NAME = `ferresoluciones-v${APP_VERSION}`;
 const urlsToCache = [
   '/',

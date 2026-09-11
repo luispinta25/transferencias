@@ -137,6 +137,38 @@ body.loaded {
     margin-top: 20px;
 }
 
+.saldo-por-banco {
+    margin-top: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    text-align: left;
+}
+
+.saldo-por-banco:empty {
+    display: none;
+}
+
+.saldo-banco-fila {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 16px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(212, 160, 23, 0.35);
+    border-radius: 10px;
+    font-size: 0.95em;
+}
+
+.saldo-banco-fila span {
+    opacity: 0.85;
+}
+
+.saldo-banco-fila strong {
+    color: #d4a017;
+    font-variant-numeric: tabular-nums;
+}
+
 .stats-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));

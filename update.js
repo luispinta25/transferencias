@@ -112,6 +112,9 @@ function renderTransferencia(data) {
     tipoTexto.textContent = data.tipo_etiqueta || (esEgreso ? 'Egreso' : 'Ingreso');
     document.getElementById('tipo-movimiento-icon').className =
         'fas ' + (esEgreso ? 'fa-arrow-down' : 'fa-arrow-up');
+    // El estilo (verde/rojo) de la pastilla depende de data-tipo -- sin esto
+    // queda con el fondo gris por defecto y el texto blanco encima ilegible.
+    document.getElementById('tipo-movimiento-badge').setAttribute('data-tipo', esEgreso ? 'egreso' : 'ingreso');
 
     // Bloquear si ya existe fotografía
     if (data.tiene_foto) {

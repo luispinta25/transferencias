@@ -124,27 +124,76 @@ function setupViewByRole(rol) {
     }
 }
 
+const API_BASE = 'https://api.ferrisoluciones.com/api';
+
+async function apiRequest(path, options = {}) {
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    const token = session?.access_token;
+    if (!token) throw new Error('Sesión no disponible.');
+    const response = await fetch(API_BASE + path, {
+        ...options,
+        headers: { Authorization: 'Bearer ' + token, ...(options.headers || {}) }
+    });
+    const raw = await response.text();
+    let body = null;
+    if (raw) {
+        try { body = JSON.parse(raw); } catch (_) { body = { raw }; }
+    }
+    if (!response.ok) throw new Error(body?.error || `Error ${response.status}`);
+    return body;
+}
+
+function money(value) {
+    return '$' + (Number(value) || 0).toFixed(2);
+}
+
+// El saldo real está repartido en varias cuentas bancarias (Guayaquil,
+// Produbanco, Pacífico, Pichincha, Deuna...) y ferre_saldos_bancarios ya
+// incluye las conciliaciones manuales ("cortes"). El total plano que se
+// mostraba antes (ferre_saldo_actual) no reflejaba eso -- se reemplaza por
+// la suma real de cada banco, con el detalle abajo del total.
 async function loadSaldo() {
     try {
-        const { data, error } = await supabaseClient
-            .from('ferre_saldo_actual')
-            .select('*')
-            .eq('id', 1)
-            .single();
+        const response = await apiRequest('/payment-methods/transfer/balances', { method: 'GET' });
+        const cuentas = response?.data || [];
+        const consolidar = response?.settings?.consolidar_pichincha_deuna === true;
 
-        if (error) throw error;
+        const total = cuentas.reduce((sum, cuenta) => sum + (Number(cuenta.saldo) || 0), 0);
+        document.getElementById('saldo-total').textContent = money(total);
+        document.getElementById('ultima-actualizacion').textContent =
+            new Date().toLocaleString('es-EC');
 
-        if (data) {
-            document.getElementById('saldo-total').textContent =
-                '$' + parseFloat(data.monto_total || 0).toFixed(2);
-
-            const fecha = new Date(data.ultima_actualizacion);
-            document.getElementById('ultima-actualizacion').textContent =
-                fecha.toLocaleString('es-ES');
-        }
+        renderSaldoPorBanco(cuentas, consolidar);
     } catch (error) {
         console.error('Error al cargar saldo:', error);
+        document.getElementById('saldo-total').textContent = 'Error';
     }
+}
+
+function renderSaldoPorBanco(cuentas, consolidar) {
+    const cont = document.getElementById('saldo-por-banco');
+    if (!cont) return;
+
+    let lista = cuentas
+        .filter((cuenta) => cuenta.activo !== false)
+        .map((cuenta) => ({ ...cuenta, saldo: Number(cuenta.saldo) || 0 }));
+
+    if (consolidar) {
+        const pichincha = lista.find((c) => c.metodo_transferencia_codigo === 'PICHINCHA');
+        const deuna = lista.find((c) => c.metodo_transferencia_codigo === 'DEUNA');
+        if (pichincha && deuna) {
+            pichincha.nombre = `${pichincha.nombre} / Deuna`;
+            pichincha.saldo += deuna.saldo;
+            lista = lista.filter((c) => c.metodo_transferencia_codigo !== 'DEUNA');
+        }
+    }
+
+    cont.innerHTML = lista.map((cuenta) => (
+        `<div class="saldo-banco-fila">
+            <span>${cuenta.nombre || 'Sin banco asignado'}</span>
+            <strong>${money(cuenta.saldo)}</strong>
+        </div>`
+    )).join('');
 }
 
 async function enrichTransferenciasWithNames(transferencias) {

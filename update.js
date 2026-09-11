@@ -1,6 +1,12 @@
 const supabaseUrl = 'https://lpsupabase.luispintasolutions.com';
 const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.ewogICJyb2xlIjogImFub24iLAogICJpc3MiOiAic3VwYWJhc2UiLAogICJpYXQiOiAxNzE1MDUwODAwLAogICJleHAiOiAxODcyODE3MjAwCn0.LJEZ3yyGRxLBmCKM9z3EW-Yla1SszwbmvQMngMe3IWA';
 const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
+// La sesión de Supabase Auth sigue siendo la identidad (login real, no el
+// código de 6 dígitos que había antes). Todo lo demás -- leer el registro,
+// subir la foto, avisar por WhatsApp -- ya NO habla directo con Supabase:
+// pasa por el backend (api-pos), que valida la sesión, no deja sobreescribir
+// un comprobante ya subido y sube la foto con su propia clave de servicio.
+const API_BASE = 'https://api.ferrisoluciones.com/api/transfer-proof';
 
 const urlParams = new URLSearchParams(window.location.search);
 const idVenta = urlParams.get('v');
@@ -10,19 +16,40 @@ const errorMessage = document.getElementById('error-message');
 const formCard = document.getElementById('update-form-card');
 const montoInput = document.getElementById('monto');
 const motivoInput = document.getElementById('motivo');
+const tipoTexto = document.getElementById('tipo-movimiento-texto');
 
 let currentTransferencia = null;
 let currentUser = null;
 let currentPhoto = null;
 
-// Inicialización
+async function apiRequest(path, options = {}) {
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    const token = session?.access_token;
+    if (!token) throw new Error('Sesión no disponible.');
+    const response = await fetch(API_BASE + path, {
+        ...options,
+        headers: {
+            Authorization: 'Bearer ' + token,
+            ...(options.body ? { 'Content-Type': 'application/json' } : {}),
+            ...(options.headers || {})
+        }
+    });
+    const raw = await response.text();
+    let body = null;
+    if (raw) {
+        try { body = JSON.parse(raw); } catch (_) { body = { raw }; }
+    }
+    if (!response.ok) throw new Error(body?.error || `Error ${response.status}`);
+    return body;
+}
+
 // Inicialización
 async function init() {
     await checkAuth();
     if (idVenta) {
         loadTransferencia();
     } else {
-        showError('No se proporcionó un ID de venta válido.');
+        showError('No se proporcionó un código de transferencia válido.');
     }
 
     // Fix: Mostrar el cuerpo de la página eliminando la opacidad
@@ -65,46 +92,9 @@ async function checkAuth() {
 
 async function loadTransferencia() {
     try {
-        // 1. Intentar buscar en transferencias (por si ya existe registro parcial)
-        let { data, error } = await supabaseClient
-            .from('ferre_transferencias')
-            .select('*')
-            .eq('id_venta', idVenta)
-            .maybeSingle();
-
-        if (error) throw error;
-
-        // 2. Si no existe en transferencias, buscar en la tabla de ventas original
-        if (!data) {
-            console.log('No encontrado en transferencias, buscando en ferre_ventas...');
-            const { data: ventaData, error: ventaError } = await supabaseClient
-                .from('ferre_ventas')
-                .select('*')
-                .eq('id_venta', idVenta)
-                .maybeSingle();
-
-            if (ventaError) throw ventaError;
-
-            if (ventaData) {
-                // Mapear datos de la venta al formato de transferencia
-                data = {
-                    id_venta: ventaData.id_venta,
-                    monto: ventaData.total,
-                    motivo: `Pago de venta ${ventaData.id_venta}`,
-                    caso: 'ingreso', // Por defecto las ventas son ingresos
-                    isNew: true // Flag para saber que debemos insertar en lugar de actualizar
-                };
-            }
-        }
-
-        if (!data) {
-            showError(`El ID de venta ${idVenta} no existe en transferencias ni en ventas.`);
-            return;
-        }
-
-        currentTransferencia = data;
-        renderTransferencia(data);
-
+        const response = await apiRequest('/' + encodeURIComponent(idVenta), { method: 'GET' });
+        currentTransferencia = response.data;
+        renderTransferencia(currentTransferencia);
     } catch (error) {
         console.error('Error al cargar transferencia:', error);
         showError('Error al cargar los datos: ' + error.message);
@@ -118,23 +108,28 @@ function renderTransferencia(data) {
     montoInput.value = data.monto;
     motivoInput.value = data.motivo;
 
+    const esEgreso = String(data.caso).toLowerCase() === 'egreso';
+    tipoTexto.textContent = data.tipo_etiqueta || (esEgreso ? 'Egreso' : 'Ingreso');
+    document.getElementById('tipo-movimiento-icon').className =
+        'fas ' + (esEgreso ? 'fa-arrow-down' : 'fa-arrow-up');
+
     // Bloquear si ya existe fotografía
-    if (data.fotografia) {
+    if (data.tiene_foto) {
         showMessage('Este registro ya cuenta con un comprobante. No se permiten actualizaciones.', 'error');
         const submitBtn = document.getElementById('submit-btn');
         submitBtn.disabled = true;
         submitBtn.innerHTML = '<i class="fas fa-lock"></i> Registro Bloqueado';
-        
+
         // También ocultamos los botones de foto para evitar confusión
         const fotoButtons = document.querySelector('.foto-buttons');
         if (fotoButtons) fotoButtons.style.display = 'none';
-        
+
         // Mostrar la foto actual
         const fotoPreview = document.getElementById('foto-preview');
         const previewImg = document.getElementById('preview-img');
         const previewFilename = document.getElementById('preview-filename');
-        if (fotoPreview && previewImg) {
-            previewImg.src = data.fotografia;
+        if (fotoPreview && previewImg && data.foto_url) {
+            previewImg.src = data.foto_url;
             previewFilename.textContent = 'Comprobante ya registrado';
             fotoPreview.style.display = 'flex';
         }
@@ -172,7 +167,7 @@ function showMessage(text, type) {
     }, 4000);
 }
 
-// --- Manejo de Fotos (Reutilizado de app.js) ---
+// --- Manejo de Fotos ---
 const btnCamara = document.getElementById('btn-camara');
 const btnGaleria = document.getElementById('btn-galeria');
 const fotoPreview = document.getElementById('foto-preview');
@@ -280,6 +275,15 @@ async function compressImageToWebP(file, quality = 0.8) {
     });
 }
 
+function fileToDataUrl(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+    });
+}
+
 btnCamara.addEventListener('click', async () => {
     const file = await selectPhoto({ capture: 'environment' });
     handlePhotoSelection(file);
@@ -290,121 +294,10 @@ btnGaleria.addEventListener('click', async () => {
     handlePhotoSelection(file);
 });
 
-function construirMensajeActualizacionVenta({ idVenta, monto, motivo }) {
-    const montoFormateado = Number.parseFloat(monto || 0).toFixed(2);
-    const partes = [
-        '✅ *La venta ha sido actualizada correctamente.*',
-        '',
-        `💵 *Monto:* $${montoFormateado}`
-    ];
-
-    if (idVenta) {
-        partes.push(`🧾 *Venta:* ${idVenta}`);
-    }
-
-    if ((motivo || '').trim()) {
-        partes.push(`📝 *Motivo:* ${(motivo || '').trim()}`);
-    }
-
-    partes.push('', '📸 *Comprobante actualizado*');
-
-    return partes.join('\n');
-}
-
-// Función para subir foto a Supabase Bucket y notificar a n8n
-async function uploadPhotoToSupabase(file, motivo, originalMessageId = null) {
-    try {
-        const ahora = new Date();
-        const dia = String(ahora.getDate()).padStart(2, '0');
-        const hora = String(ahora.getHours()).padStart(2, '0') + String(ahora.getMinutes()).padStart(2, '0');
-        const seg = String(ahora.getSeconds()).padStart(2, '0');
-
-        const datosActualizacion = typeof motivo === 'object' && motivo !== null
-            ? motivo
-            : { motivo };
-        const motivoTexto = (datosActualizacion.motivo || '').trim();
-        const captionAmigable = construirMensajeActualizacionVenta(datosActualizacion);
-        const motivoLimpio = (motivoTexto || 'UPDATE').substring(0, 30).replace(/[^a-zA-Z0-9]/g, '_').toUpperCase();
-        // Generar un nombre único con segundos para evitar colisiones
-        const filename = `${dia}_${hora}${seg}_${motivoLimpio}.webp`;
-
-        const path = `transferencias/${filename}`;
-
-        console.log('Subiendo a Supabase:', path);
-
-        // Subir al bucket 'ferrisoluciones'
-        const { data: uploadData, error: uploadError } = await supabaseClient
-            .storage
-            .from('ferrisoluciones')
-            .upload(path, file, {
-                cacheControl: '3600',
-                upsert: false
-            });
-
-        if (uploadError) {
-            console.error('Error al subir a Supabase:', uploadError);
-            throw uploadError;
-        }
-
-        // Obtener la URL pública
-        const { data: { publicUrl } } = supabaseClient
-            .storage
-            .from('ferrisoluciones')
-            .getPublicUrl(path);
-
-        console.log('URL pública generada:', publicUrl);
-
-        // Enviar al nuevo webhook de n8n
-        let messageId = null;
-        try {
-            const webhookResponse = await fetch('https://lpn8nwebhook.luispintasolutions.com/webhook/a93e51ea-2752-4a11-9190-49460bb0745f', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    url: publicUrl,
-                    filename: filename,
-                    motivo: motivoTexto,
-                    monto: datosActualizacion.monto || null,
-                    id_venta: datosActualizacion.idVenta || null,
-                    mensaje: captionAmigable,
-                    caption: captionAmigable,
-                    transferencia_id: Date.now(),
-                    id_message_original: originalMessageId, // Incluimos el ID original si existe
-                    tipo: 'subida_directa_supabase_update',
-                    fecha: ahora.toISOString()
-                })
-            });
-            console.log('Notificación enviada a n8n:', webhookResponse.status);
-
-            if (webhookResponse.ok) {
-                const dataResponse = await webhookResponse.json();
-                if (Array.isArray(dataResponse) && dataResponse.length > 0) {
-                    messageId = dataResponse[0].data?.key?.id;
-                } else if (dataResponse.data?.key?.id) {
-                    messageId = dataResponse.data.key.id;
-                }
-                if (messageId) console.log('MessageId capturado desde n8n:', messageId);
-            }
-        } catch (webhookErr) {
-            console.warn('Error al enviar notificación a n8n, pero la subida fue exitosa:', webhookErr);
-        }
-
-        return { publicUrl, messageId };
-    } catch (error) {
-        console.error('Error en uploadPhotoToSupabase:', error);
-        throw error;
-    }
-}
-async function uploadPhotoToWebhook(file, motivo, originalMessageId = null) {
-    return await uploadPhotoToSupabase(file, motivo, originalMessageId);
-}
-
 document.getElementById('update-form').addEventListener('submit', async (e) => {
     e.preventDefault();
 
-    if (currentTransferencia && currentTransferencia.fotografia) {
+    if (currentTransferencia && currentTransferencia.tiene_foto) {
         showMessage('Este registro ya tiene un comprobante y no puede ser modificado.', 'error');
         return;
     }
@@ -419,55 +312,15 @@ document.getElementById('update-form').addEventListener('submit', async (e) => {
     submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Procesando...';
 
     try {
-        // 1. Subir Foto (Pasamos el ID de mensaje original si existe)
-        const resultUpload = await uploadPhotoToSupabase(
-            currentPhoto, 
-            {
-                motivo: currentTransferencia.motivo,
-                monto: currentTransferencia.monto,
-                idVenta: idVenta
-            }, 
-            currentTransferencia.id_message
-        );
-        const fotoUrl = resultUpload.publicUrl;
-        const msgId = resultUpload.messageId;
-
-        // 2. Actualizar o Insertar en Supabase
-        let result;
-        if (currentTransferencia.isNew) {
-            // Si es nuevo, insertamos
-            result = await supabaseClient
-                .from('ferre_transferencias')
-                .insert([{
-                    id_venta: idVenta,
-                    monto: currentTransferencia.monto,
-                    motivo: currentTransferencia.motivo,
-                    caso: 'ingreso',
-                    fotografia: fotoUrl,
-                    user_id: currentUser.id,
-                    subido_por: currentUser.email,
-                    id_message: msgId
-                }]);
-        } else {
-            // Si ya existe, actualizamos
-            const updateData = {
-                fotografia: fotoUrl,
-                user_id: currentUser.id,
-                subido_por: currentUser.email,
-            };
-            
-            // Si el webhook devolvió un nuevo ID de mensaje, lo actualizamos también
-            if (msgId) {
-                updateData.id_message = msgId;
-            }
-
-            result = await supabaseClient
-                .from('ferre_transferencias')
-                .update(updateData)
-                .eq('id', currentTransferencia.id);
-        }
-
-        if (result.error) throw result.error;
+        const dataUrl = await fileToDataUrl(currentPhoto);
+        await apiRequest('/' + encodeURIComponent(idVenta), {
+            method: 'POST',
+            body: JSON.stringify({
+                dataUrl,
+                mimetype: currentPhoto.type || 'image/webp',
+                fileName: currentPhoto.name
+            })
+        });
 
         showMessage('Actualización exitosa', 'success');
         setTimeout(() => window.location.reload(), 2000);

@@ -2,93 +2,19 @@ const supabaseUrl = 'https://lpsupabase.luispintasolutions.com';
 const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.ewogICJyb2xlIjogImFub24iLAogICJpc3MiOiAic3VwYWJhc2UiLAogICJpYXQiOiAxNzE1MDUwODAwLAogICJleHAiOiAxODcyODE3MjAwCn0.LJEZ3yyGRxLBmCKM9z3EW-Yla1SszwbmvQMngMe3IWA';
 const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
 
-// --- Lógica de Redirección y Bloqueo ---
+// --- Redirección ---
+// Si llega con ?v=, va directo a actualizar ese comprobante. Sin ese
+// parámetro, se queda en el dashboard, que ya exige sesión real de Supabase
+// (checkAuth() más abajo) -- antes había además un modal de "código de 6
+// dígitos" que se generaba y verificaba en el propio navegador (el código
+// quedaba impreso en la consola) apuntando a un elemento del DOM que nunca
+// existió en index.html, así que nunca se mostraba: era teatro de seguridad
+// ya roto. Se quitó; la sesión de Supabase es la única puerta.
 const urlParams = new URLSearchParams(window.location.search);
 const ventaParam = urlParams.get('v');
 
 if (ventaParam) {
-    // Si existe el parámetro v, redirigir al modo actualización
     window.location.href = `update.html?v=${ventaParam}`;
-} else {
-    // Si NO existe el parámetro, activar bloqueo de Modo Directo
-    document.addEventListener('DOMContentLoaded', () => {
-        const modalVerificacion = document.getElementById('modal-verificacion');
-        // Mostrar modal y bloquear cierre (no tiene botón de cerrar ni cierra al click fuera)
-        modalVerificacion.style.display = 'flex';
-        modalVerificacion.style.alignItems = 'center';
-        modalVerificacion.style.justifyContent = 'center';
-
-        const btnSolicitar = document.getElementById('btn-solicitar-codigo');
-        const btnVerificar = document.getElementById('btn-verificar-codigo');
-        const inputCodigo = document.getElementById('codigo-verificacion');
-        const msgVerificacion = document.getElementById('msg-verificacion');
-
-        // Generar código aleatorio de 6 caracteres
-        function generarCodigo() {
-            const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-            let codigo = '';
-            for (let i = 0; i < 6; i++) {
-                codigo += chars.charAt(Math.floor(Math.random() * chars.length));
-            }
-            return codigo;
-        }
-
-        let codigoGenerado = null;
-
-        btnSolicitar.addEventListener('click', async () => {
-            btnSolicitar.disabled = true;
-            btnSolicitar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Solicitando...';
-            msgVerificacion.textContent = '';
-            msgVerificacion.style.color = '#333';
-
-            try {
-                codigoGenerado = generarCodigo();
-                console.log('Código generado (para debug):', codigoGenerado);
-
-                // Enviar webhook con el código y mensaje formateado
-                const response = await fetch('https://lpn8nwebhook.luispintasolutions.com/webhook/simple_sin_respuesta', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        tipo: 'solicitud_acceso_directo',
-                        mensaje: `🔐 *Código de Verificación*\n\nSu código es: *${codigoGenerado}*\n\nUse este código para acceder al sistema de TRANSFERENCIAS.`,
-                        fecha: new Date().toISOString()
-                    })
-                });
-
-                if (response.ok) {
-                    msgVerificacion.textContent = 'Código enviado correctamente. Revise su notficación.';
-                    msgVerificacion.style.color = 'green';
-                } else {
-                    throw new Error('Error al enviar código');
-                }
-            } catch (error) {
-                console.error('Error:', error);
-                msgVerificacion.textContent = 'Error al solicitar código. Intente nuevamente.';
-                msgVerificacion.style.color = 'red';
-            } finally {
-                btnSolicitar.disabled = false;
-                btnSolicitar.innerHTML = '<i class="fas fa-key"></i> Solicitar Nuevo Código';
-            }
-        });
-
-        btnVerificar.addEventListener('click', () => {
-            const codigoIngresado = inputCodigo.value.toUpperCase().trim();
-
-            // Backdoor estático temporal o lógica solo con código generado
-            if (codigoGenerado && codigoIngresado === codigoGenerado) {
-                modalVerificacion.style.display = 'none';
-                showMessage('Modo Directo Activado', 'success');
-            } else {
-                msgVerificacion.textContent = 'Código incorrecto.';
-                msgVerificacion.style.color = 'red';
-                inputCodigo.classList.add('campo-error');
-                setTimeout(() => inputCodigo.classList.remove('campo-error'), 1000);
-            }
-        });
-    });
 }
 
 let currentUser = null;

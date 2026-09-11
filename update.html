@@ -18,7 +18,7 @@
                     alt="Ferrisoluciones" class="nav-logo">
                 <div class="nav-brand-copy">
                     <span class="nav-title">Actualizar Transferencia</span>
-                    <span class="app-version-badge">v1.0.2</span>
+                    <span class="app-version-badge">v1.0.3</span>
                 </div>
             </div>
             <div class="nav-user">
@@ -43,10 +43,13 @@
                     <div class="form-group full-width">
                         <label><i class="fas fa-exchange-alt"></i> Tipo de Movimiento</label>
                         <div class="tipo-buttons">
-                            <!-- Solo visual, no clickable/seleccionable -->
-                            <div class="tipo-btn active" data-tipo="ingreso"
+                            <!-- Solo visual, no clickable/seleccionable. El texto e icono
+                                 los pone update.js según el registro real (venta, gasto o
+                                 pago a proveedor / ingreso o egreso). -->
+                            <div class="tipo-btn active" id="tipo-movimiento-badge"
                                 style="cursor: default; pointer-events: none;">
-                                <i class="fas fa-arrow-up"></i> Ingreso
+                                <i class="fas fa-arrow-up" id="tipo-movimiento-icon"></i>
+                                <span id="tipo-movimiento-texto">Cargando...</span>
                             </div>
                         </div>
                     </div>
